@@ -1,6 +1,6 @@
 # Fidelity
 
-Multi-platform music downloader with support for Tidal (lossless FLAC), YouTube, and Spotify.
+Multi-platform music downloader with support for Tidal (lossless FLAC) and YouTube.
 
 ---
 
@@ -47,9 +47,6 @@ Dependencies install automatically on first run.
 |---|---|---|
 | Tidal | Lossless FLAC / Hi-Res | Yes — HiFi or HiFi Plus |
 | YouTube | Up to ~160kbps Opus | No |
-| Spotify | Up to 320kbps | Yes — any plan |
-
-> Spotify downloads are matched to YouTube with full Spotify metadata (cover art, artist, album, lyrics).
 
 ---
 

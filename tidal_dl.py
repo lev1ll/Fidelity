@@ -685,7 +685,7 @@ def get_spotify_token():
                 self.send_header("Content-type", "text/html; charset=utf-8")
                 self.end_headers()
                 self.wfile.write(
-                    b"<h2>Listo! Podés cerrar esta ventana y volver a Fidelity.</h2>"
+                    "<h2>Listo! Podes cerrar esta ventana y volver a Fidelity.</h2>".encode("utf-8")
                 )
             else:
                 self.send_response(400)

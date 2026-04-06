@@ -2,8 +2,15 @@ import sys
 import subprocess
 import shutil
 import json
+import time
+import webbrowser
+import urllib.parse
+import http.server
+import threading
+import base64
+import secrets
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -46,6 +53,14 @@ import re
 from pathlib import Path
 from mutagen.flac import FLAC, Picture
 from mutagen.mp4 import MP4, MP4Cover
+
+# ─── Spotify App Credentials ─────────────────────────────────────────────────
+
+SPOTIFY_CLIENT_ID     = "e9d1e7f322194c43a26f491473773adc"
+SPOTIFY_CLIENT_SECRET = "2d89d33e935a4b069910a40782840652"
+SPOTIFY_REDIRECT_URI  = "http://127.0.0.1:8888/callback"
+SPOTIFY_SCOPES        = "playlist-read-private user-library-read"
+SPOTIFY_TOKEN_FILE    = Path.home() / ".musicdl" / "spotify_token.json"
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -592,10 +607,122 @@ def menu_youtube(download_dir):
 
 # ─── SPOTIFY ─────────────────────────────────────────────────────────────────
 
-def spotdl_run(args, dest_dir):
+def _spotify_exchange_code(code):
+    creds = base64.b64encode(
+        f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}".encode()
+    ).decode()
+    r = requests.post(
+        "https://accounts.spotify.com/api/token",
+        headers={"Authorization": f"Basic {creds}"},
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": SPOTIFY_REDIRECT_URI,
+        },
+    )
+    r.raise_for_status()
+    return r.json()
+
+def _spotify_refresh(refresh_token):
+    creds = base64.b64encode(
+        f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}".encode()
+    ).decode()
+    r = requests.post(
+        "https://accounts.spotify.com/api/token",
+        headers={"Authorization": f"Basic {creds}"},
+        data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+    )
+    r.raise_for_status()
+    data = r.json()
+    if "refresh_token" not in data:
+        data["refresh_token"] = refresh_token
+    return data
+
+def _spotify_save_token(data):
+    data["expires_at"] = time.time() + data.get("expires_in", 3600) - 60
+    SPOTIFY_TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(SPOTIFY_TOKEN_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+def get_spotify_token():
+    # Intentar cargar token guardado
+    if SPOTIFY_TOKEN_FILE.exists():
+        try:
+            with open(SPOTIFY_TOKEN_FILE) as f:
+                data = json.load(f)
+            if data.get("expires_at", 0) > time.time():
+                return data["access_token"]
+            if data.get("refresh_token"):
+                print("  Renovando sesión Spotify...")
+                refreshed = _spotify_refresh(data["refresh_token"])
+                _spotify_save_token(refreshed)
+                return refreshed["access_token"]
+        except Exception:
+            pass
+
+    # OAuth flow completo
+    state = secrets.token_urlsafe(16)
+    auth_url = (
+        "https://accounts.spotify.com/authorize?"
+        + urllib.parse.urlencode({
+            "client_id": SPOTIFY_CLIENT_ID,
+            "response_type": "code",
+            "redirect_uri": SPOTIFY_REDIRECT_URI,
+            "scope": SPOTIFY_SCOPES,
+            "state": state,
+        })
+    )
+
+    code_holder = {}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            parsed = urllib.parse.urlparse(self.path)
+            params = urllib.parse.parse_qs(parsed.query)
+            if params.get("state", [""])[0] == state and "code" in params:
+                code_holder["code"] = params["code"][0]
+                self.send_response(200)
+                self.send_header("Content-type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(
+                    b"<h2>Listo! Podés cerrar esta ventana y volver a Fidelity.</h2>"
+                )
+            else:
+                self.send_response(400)
+                self.end_headers()
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 8888), Handler)
+    thread = threading.Thread(target=server.handle_request)
+    thread.daemon = True
+    thread.start()
+
+    print("\n  Abrí el link en el navegador para iniciar sesión en Spotify:")
+    print()
+    print(f"  {auth_url}")
+    print()
+    webbrowser.open(auth_url)
+
+    thread.join(timeout=120)
+    server.server_close()
+
+    if "code" not in code_holder:
+        raise Exception("No se recibió respuesta de Spotify. Intentá de nuevo.")
+
+    token_data = _spotify_exchange_code(code_holder["code"])
+    _spotify_save_token(token_data)
+    print("  ✓ Sesión Spotify guardada!")
+    return token_data["access_token"]
+
+def spotdl_run(args, dest_dir, token=None):
     cmd = [sys.executable, "-m", "spotdl"] + args + [
-        "--output", str(dest_dir / "{artist} - {title}.{output-ext}")
+        "--output", str(dest_dir / "{artist} - {title}.{output-ext}"),
+        "--client-id", SPOTIFY_CLIENT_ID,
+        "--client-secret", SPOTIFY_CLIENT_SECRET,
     ]
+    if token:
+        cmd += ["--auth-token", token]
     subprocess.run(cmd)
 
 def menu_spotify(download_dir):
@@ -606,6 +733,13 @@ def menu_spotify(download_dir):
         input("\n  Enter para volver...")
         return
 
+    try:
+        token = get_spotify_token()
+    except Exception as e:
+        print(f"\n  Error al iniciar sesión en Spotify: {e}")
+        input("  Enter para volver...")
+        return
+
     while True:
         print("\n  ── Spotify ───────────────────────────────────────")
         print("  Gran catálogo · Requiere cuenta Spotify")
@@ -613,11 +747,20 @@ def menu_spotify(download_dir):
         print()
         print("  1. Buscar canción / artista / album")
         print("  2. Pegar URL de Spotify")
+        print("  3. Cerrar sesión (logout)")
         print("  0. Volver")
 
-        choice = ask("\n  Elegí: ", ["0","1","2"])
+        choice = ask("\n  Elegí: ", ["0","1","2","3"])
         if choice == "0":
             break
+
+        if choice == "3":
+            if SPOTIFY_TOKEN_FILE.exists():
+                SPOTIFY_TOKEN_FILE.unlink()
+                print("\n  ✓ Sesión cerrada.")
+            else:
+                print("\n  No hay sesión activa.")
+            return
 
         dest = download_dir / "Spotify"
         dest.mkdir(parents=True, exist_ok=True)
@@ -627,7 +770,7 @@ def menu_spotify(download_dir):
             if not query:
                 continue
             print()
-            spotdl_run(["download", query], dest)
+            spotdl_run(["download", query], dest, token)
 
         elif choice == "2":
             url = input("\n  Pegá el link de Spotify: ").strip()
@@ -637,7 +780,7 @@ def menu_spotify(download_dir):
                 print("  URL no válida.")
                 continue
             print()
-            spotdl_run(["download", url], dest)
+            spotdl_run(["download", url], dest, token)
 
         print(f"\n  ✓ Guardado en: {dest}")
 
@@ -689,6 +832,7 @@ def main():
 
         elif choice == "3":
             menu_spotify(download_dir)
+            # el token se guarda en archivo, se recarga solo la próxima vez
 
 if __name__ == "__main__":
     main()

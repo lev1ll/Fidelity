@@ -14,13 +14,19 @@ Multi-platform music downloader with support for Tidal (lossless FLAC), YouTube,
 ## Install
 
 ```bash
-pip install git+https://github.com/lev1ll/Fidelity.git
+pip install fidelity-dl
 ```
 
 Then run from anywhere:
 
 ```bash
 fidelity
+```
+
+Or install directly from source:
+
+```bash
+pip install git+https://github.com/lev1ll/Fidelity.git
 ```
 
 Or without installing:

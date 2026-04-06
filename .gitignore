@@ -1,0 +1,17 @@
+# Sesion de Tidal (contiene tokens privados)
+tidal_session.json
+*.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db

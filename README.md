@@ -80,4 +80,15 @@ Downloads are organized by platform:
 
 ---
 
+## Legal Disclaimer
+
+This project is intended for **educational and personal use only**.
+
+- This tool does not host, store, or distribute any copyrighted content.
+- Users are solely responsible for how they use this software and must comply with the Terms of Service of each platform (Tidal, YouTube, Spotify) and the copyright laws of their country.
+- Downloading copyrighted material without authorization may violate applicable laws. The author does not condone or encourage piracy.
+- This project is not affiliated with, endorsed by, or connected to Tidal, YouTube, or Spotify in any way.
+
+---
+
 Enjoy.

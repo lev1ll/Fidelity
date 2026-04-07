@@ -9,7 +9,7 @@ import re
 import questionary
 from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
 
-__version__ = "1.9.9"
+__version__ = "2.0.0"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -515,47 +515,58 @@ def pick(items, label_fn, title=""):
     return None
 
 def pick_multi(items, label_fn, title=""):
-    """Selecciona múltiples items con checkboxes (ESPACIO para marcar, ENTER para confirmar)."""
+    """Selecciona múltiples items por número. Escribe números separados por comas."""
     if not items:
         console.print("[yellow]No hay items para seleccionar.[/yellow]")
         return None
 
+    color_palette = ["hot_pink", "deep_sky_blue1", "gold1", "green1", "medium_purple", "orange1", "cyan1", "magenta"]
+    icons = ["📁", "💿", "🎵", "🎸", "🎹", "🎤", "🎧", "📀"]
+
     if title:
         console.print(f"\n[bold cyan]{title}[/bold cyan]")
 
-    console.print("[bold gold1]📝 ESPACIO para marcar, ENTER para confirmar, Ctrl+C para cancelar[/bold gold1]\n")
+    for i, item in enumerate(items):
+        color = color_palette[i % len(color_palette)]
+        icon = icons[i % len(icons)]
+        label = label_fn(item)
+        label_short = label[:70] + "..." if len(label) > 70 else label
+        console.print(f"  [{color}]{i + 1:2d}.[/{color}] {icon} {label_short}")
 
-    icons = ["📁", "💿", "🎵", "🎸", "🎹", "🎤", "🎧", "📀"]
-    choices = [
-        questionary.Choice(
-            title=f"{icons[i % 8]} {label_fn(item)}",
-            value=i
-        )
-        for i, item in enumerate(items)
-    ]
+    console.print(f"\n[bold gold1]Escribe los números separados por comas, o 'a' para todos:[/bold gold1]")
 
     try:
-        selected_indices = questionary.checkbox(
-            "Selecciona items:",
-            choices=choices,
-            style=questionary.Style([
-                ('checkbox', 'fg:#ff69b4'),
-                ('checkbox-selected', 'fg:#00ff00 bold'),
-                ('highlighted', 'fg:#00d4ff bold'),
-                ('pointer', 'fg:#ff69b4 bold'),
-            ])
-        ).ask()
-    except KeyboardInterrupt:
+        resp = input("  > ").strip().lower()
+    except (KeyboardInterrupt, EOFError):
         console.print("\n[yellow]Cancelado.[/yellow]")
         return None
 
-    if selected_indices is None:
-        return None
-    if not selected_indices:
-        console.print("[red]❌ No seleccionaste ningún item.[/red]")
+    if not resp:
         return None
 
-    return [items[i] for i in selected_indices]
+    if resp == "a":
+        return list(items)
+
+    selected = []
+    for part in resp.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            idx = int(part) - 1
+            if 0 <= idx < len(items):
+                if items[idx] not in selected:
+                    selected.append(items[idx])
+            else:
+                console.print(f"  [yellow]Número {part} fuera de rango, ignorado.[/yellow]")
+        except ValueError:
+            console.print(f"  [yellow]'{part}' no es válido, ignorado.[/yellow]")
+
+    if not selected:
+        console.print("[red]No se seleccionó ningún item.[/red]")
+        return None
+
+    return selected
 
 def fmt_duration(seconds):
     if not seconds:

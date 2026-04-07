@@ -17,41 +17,69 @@ BLUE = "blue"
 WHITE = "white"
 
 def print_banner():
-    """Banner épico estilo Gemini con ASCII art grande."""
+    """Banner épico estilo Gemini con ASCII art multicolor y efectos vibrantez."""
     
     # Crear ASCII art grande con pyfiglet
     fig = pyfiglet.Figlet(font='slant', width=100)
     ascii_text = fig.renderText('FIDELITY')
     
-    # Líneas decorativas
-    banner_text = f"""
-{ascii_text}
-    ⚡  C Y B E R P U N K   M U S I C   D O W N L O A D E R  ⚡
-
-    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # Colorear cada CARÁCTER del ASCII con colores diferentes para máximo impacto (tipo Gemini)
+    ascii_lines = ascii_text.split('\n')
     
-    Tidal Hi-Res 24-bit  •  YouTube Opus  •  Multi-Platform
+    # Paleta de colores vibrantes tipo Gemini
+    color_palette = [
+        "hot_pink",          # Rosa brillante
+        "deep_sky_blue1",    # Azul cielo
+        "medium_purple",     # Púrpura
+        "gold1",             # Dorado
+        "green1",            # Verde brillante
+        "magenta",           # Magenta
+        "cyan1",             # Cyan brillante
+        "orange1",           # Naranja
+    ]
     
-    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    """
-    
-    # Aplicar estilos de color - cada línea con color diferente
-    lines = banner_text.split('\n')
-    styled_lines = []
-    
-    for i, line in enumerate(lines):
-        if 'FIDELITY' in line:
-            styled_lines.append(f"[bold {MAGENTA}]{line}[/bold {MAGENTA}]")
-        elif '⚡' in line:
-            styled_lines.append(f"[bold {CYAN}]{line}[/bold {CYAN}]")
-        elif '━' in line:
-            styled_lines.append(f"[{PURPLE}]{line}[/{PURPLE}]")
-        elif line.strip():
-            styled_lines.append(f"[{CYAN}]{line}[/{CYAN}]")
+    # Colorear línea por línea con rotación de colores
+    colored_ascii = []
+    for line_idx, line in enumerate(ascii_lines):
+        if line.strip():
+            color = color_palette[line_idx % len(color_palette)]
+            colored_ascii.append(f"[bold {color}]{line}[/bold {color}]")
         else:
-            styled_lines.append(line)
+            colored_ascii.append(line)
     
-    styled_banner = '\n'.join(styled_lines)
+    colored_ascii_text = '\n'.join(colored_ascii)
+    
+    # Banner con máximo de decoración y colores vibrantes
+    banner_parts = [
+        f"\n[bold deep_sky_blue1]▓▓▓▓▓[/bold deep_sky_blue1] " +
+        f"[bold hot_pink]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold hot_pink] " +
+        f"[bold deep_sky_blue1]▓▓▓▓▓[/bold deep_sky_blue1]\n",
+        
+        colored_ascii_text,
+        
+        f"\n[bold hot_pink]⚡[/bold hot_pink]  " +
+        f"[bold gold1]🎵[/bold gold1]  " +
+        f"[bold medium_purple]C Y B E R P U N K   M U S I C   D O W N L O A D E R[/bold medium_purple]  " +
+        f"[bold gold1]🎵[/bold gold1]  " +
+        f"[bold hot_pink]⚡[/bold hot_pink]\n",
+        
+        f"[deep_sky_blue1]╔══════════════════════════════════════════════════════╗[/deep_sky_blue1]\n",
+        
+        f"  [bold green1]█[/bold green1] " +
+        f"[bold orange1]Tidal Hi-Res 24-bit[/bold orange1] " +
+        f"[cyan1]→[/cyan1] " +
+        f"[bold hot_pink]YouTube Opus[/bold hot_pink] " +
+        f"[cyan1]→[/cyan1] " +
+        f"[bold medium_purple]Multi-Platform[/bold medium_purple]\n",
+        
+        f"[deep_sky_blue1]╚══════════════════════════════════════════════════════╝[/deep_sky_blue1]\n",
+        
+        f"[bold deep_sky_blue1]▓▓▓▓▓[/bold deep_sky_blue1] " +
+        f"[bold hot_pink]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold hot_pink] " +
+        f"[bold deep_sky_blue1]▓▓▓▓▓[/bold deep_sky_blue1]\n"
+    ]
+    
+    styled_banner = ''.join(banner_parts)
     console.print(styled_banner)
     console.print()
 

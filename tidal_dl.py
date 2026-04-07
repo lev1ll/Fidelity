@@ -9,7 +9,7 @@ import re
 import questionary
 from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
 
-__version__ = "2.0.3"
+__version__ = "2.0.4"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -444,20 +444,21 @@ def check_for_updates():
 
                     time.sleep(2)  # Esperar que fidelity.exe libere el lock
 
+                    print("Actualizando Fidelity...")
                     result = subprocess.run(
                         [sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
-                         "{install_url}"],
-                        capture_output=True, text=True
+                         "{install_url}"]
                     )
 
                     if result.returncode == 0:
-                        subprocess.Popen([r"{fidelity_exe}"],
-                                         creationflags=subprocess.DETACHED_PROCESS |
-                                                       subprocess.CREATE_NEW_PROCESS_GROUP)
+                        print("")
+                        print("Actualización completada. Abre Fidelity de nuevo.")
                     else:
-                        print("Error al actualizar:")
-                        print(result.stderr[-800:] if result.stderr else "(sin detalle)")
-                        input("Presiona Enter para cerrar...")
+                        print("")
+                        print("Error al actualizar. Intenta manualmente:")
+                        print('  pip install --upgrade "git+https://github.com/{GITHUB_REPO}.git"')
+
+                    input("\\nPresiona Enter para cerrar...")
                     try:
                         os.unlink(__file__)
                     except Exception:
@@ -476,7 +477,7 @@ def check_for_updates():
                     close_fds=True,
                 )
 
-                console.print("[green1]  ✓ Actualizando en segundo plano... cerrando.[/green1]")
+                console.print("[green1]  ✓ Instalando en segundo plano — abre Fidelity de nuevo cuando termine.[/green1]")
                 sys.exit(0)
     except requests.exceptions.RequestException:
         pass  # Sin internet

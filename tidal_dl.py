@@ -489,26 +489,48 @@ def get_tw_session():
     from tidal_wave.login import login as tw_login
     from tidal_wave.media import AudioFormat as TWAudioFormat
     from cachecontrol import CacheControl
+    import time
     _patch_tidal_wave()
 
     # Siempre re-extraer token del Tidal desktop para asegurarse que no expiró
     token_file = Path.home() / ".config" / "tidal-wave" / "windows-tidal.token"
     print()
     print("  Buscando token Hi-Res del Tidal desktop...", end="", flush=True)
-    if _auto_extract_tidal_token():
-        print(" ✓ encontrado!")
-    else:
+    
+    # Reintentar extracción con delay (Tidal desktop puede estar escribiendo el token)
+    found = False
+    for attempt in range(3):
+        if _auto_extract_tidal_token():
+            print(" ✓ encontrado!")
+            found = True
+            break
+        if attempt < 2:
+            print(".", end="", flush=True)
+            time.sleep(1)
+    
+    if not found:
         print(" no encontrado.")
         if not token_file.exists():
             print()
-            print("  ── Autenticación Hi-Res (tidal-wave) ────────────────")
-            print("  Seguí las instrucciones en pantalla.")
+            print("  ✗ No se pudo extraer token Hi-Res del Tidal desktop.")
+            print("  Asegúrate de:")
+            print("    • Tener la app Tidal instalada y abierta")
+            print("    • Estar logueado con cuenta HiFi/HiFi Plus")
+            print("    • Haber descargado al menos una canción Hi-Res")
             print()
+            raise RuntimeError("Token Hi-Res no disponible")
 
-    session, _ = tw_login(audio_format=TWAudioFormat.hi_res)
-    _tw_session = CacheControl(session)
-    print("  ✓ Sesion Hi-Res lista!")
-    return _tw_session
+    try:
+        session, _ = tw_login(audio_format=TWAudioFormat.hi_res)
+        if session is None:
+            raise RuntimeError("Sesión Hi-Res inválida")
+        _tw_session = CacheControl(session)
+        print("  ✓ Sesion Hi-Res lista!")
+        return _tw_session
+    except Exception as e:
+        print(f"  ✗ Error en sesión Hi-Res: {e}")
+        print("  Intenta cerrar sesión (logout) y loguearte nuevamente.")
+        raise
 
 def tidal_download_track(session, track, dest_dir, album=None, num=None, total=None):
     from tidal_wave.track import Track as TWTrack

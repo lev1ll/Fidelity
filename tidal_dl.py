@@ -313,13 +313,15 @@ def tidal_download_track(session, track, dest_dir, album=None, num=None, total=N
     try:
         stream = track.get_stream()
         manifest = stream.get_stream_manifest()
-        urls = manifest.get_urls()
-        url = urls[0]
-        quality_label = getattr(stream, "audio_quality", "") or ""
+        url = manifest.get_urls()[0]
+        ext = (manifest.file_extension or "").lstrip(".") or (
+            "m4a" if "mp4" in url.split("?")[0] else "flac"
+        )
+        quality_label = f"{stream.bit_depth}bit/{stream.sample_rate // 1000}kHz"
     except Exception:
         url = track.get_url()
+        ext = "m4a" if "mp4" in url.split("?")[0] else "flac"
 
-    ext = "m4a" if "mp4" in url.split("?")[0] else "flac"
     dest_path = dest_dir / f"{filename}.{ext}"
 
     if dest_path.exists():

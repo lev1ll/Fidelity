@@ -9,7 +9,7 @@ import re
 import questionary
 from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
 
-__version__ = "1.9.5"
+__version__ = "1.9.6"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -328,31 +328,43 @@ def get_download_dir(cfg):
 # ─── Auto-update ─────────────────────────────────────────────────────────────
 
 def check_for_updates():
+    """Verifica si hay nueva versión en GitHub y ofrece actualizar."""
     try:
         r = requests.get(
             f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
-            timeout=4
+            timeout=5
         )
         if r.status_code != 200:
             return
-        latest = r.json().get("tag_name", "").lstrip("v")
-        if latest and latest != __version__:
-            print(f"\n  ┌─ Actualización disponible ─────────────────────┐")
-            print(f"  │  Nueva versión: v{latest}  (tenés v{__version__})".ljust(52) + "│")
-            print(f"  └────────────────────────────────────────────────┘")
+        
+        data = r.json()
+        latest = data.get("tag_name", "").lstrip("v")
+        
+        if not latest:
+            return
+        
+        # Comparar versiones
+        if latest != __version__:
+            console.print(f"\n  [bold deep_sky_blue1]┌─ Actualización disponible ─────────────────────┐[/bold deep_sky_blue1]")
+            console.print(f"  [bold gold1]│  Nueva versión: v{latest}  (tenés v{__version__})[/bold gold1]".ljust(52) + "[bold deep_sky_blue1]│[/bold deep_sky_blue1]")
+            console.print(f"  [bold deep_sky_blue1]└────────────────────────────────────────────────┘[/bold deep_sky_blue1]")
+            
             ans = input("  ¿Actualizar ahora? (s/n): ").strip().lower()
             if ans == "s":
-                print("  Actualizando...")
+                console.print("[cyan]  ⟳ Actualizando desde GitHub...[/cyan]")
                 subprocess.run(
-                    [sys.executable, "-m", "pip", "install", "--upgrade",
-                     f"git+https://github.com/{GITHUB_REPO}.git"],
-                    check=True
+                    [sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
+                     f"git+https://github.com/{GITHUB_REPO}.git@{latest}"],
+                    check=False
                 )
-                print("  ✓ Actualizado! Reiniciando...")
+                console.print("[green1]  ✓ Actualizado! Reiniciando...[/green1]")
                 subprocess.run([sys.executable] + sys.argv)
                 sys.exit()
-    except Exception:
-        pass  # Sin internet o repo privado, seguimos igual
+    except requests.exceptions.RequestException:
+        pass  # Sin internet
+    except Exception as e:
+        # Log silencioso de errores
+        pass
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 

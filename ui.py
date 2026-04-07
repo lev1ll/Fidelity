@@ -5,16 +5,23 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.align import Align
 from rich.table import Table
+from rich.syntax import Syntax
 import pyfiglet
+import questionary
 
 console = Console()
 
-# Colores TRON
+# Colores vibrantes tipo Gemini
 CYAN = "cyan1"
 MAGENTA = "magenta"
 PURPLE = "purple"
 BLUE = "blue"
 WHITE = "white"
+HOT_PINK = "hot_pink"
+DEEP_BLUE = "deep_sky_blue1"
+GOLD = "gold1"
+GREEN = "green1"
+ORANGE = "orange1"
 
 def print_banner():
     """Banner épico estilo Gemini con ASCII art multicolor y efectos vibrantez."""
@@ -176,3 +183,101 @@ def print_welcome():
     print_banner()
     console.print(f"[{PURPLE}]Iniciando sesión...[/{PURPLE}]")
     console.print()
+
+def menu_interactive(title, options, subtitle=""):
+    """Menú interactivo con navegación por flechas ↑↓.
+    
+    Args:
+        title: Título del menú
+        options: Lista de opciones (strings)
+        subtitle: Subtítulo opcional
+        
+    Returns:
+        El índice de la opción seleccionada (0-based)
+    """
+    console.print(f"\n[bold {HOT_PINK}]{'━' * 60}[/bold {HOT_PINK}]")
+    console.print(f"[bold {GOLD}]▶ {title}[/bold {GOLD}]")
+    if subtitle:
+        console.print(f"[{DEEP_BLUE}]{subtitle}[/{DEEP_BLUE}]")
+    console.print(f"[bold {HOT_PINK}]{'━' * 60}[/bold {HOT_PINK}]\n")
+    
+    # Usar questionary para menú con flechas
+    answer = questionary.select(
+        "Selecciona con ↑↓ y presiona ENTER:",
+        choices=options,
+        pointer="→ [bold hot_pink]►[/bold hot_pink]",
+        style=questionary.Style([
+            ('pointer', 'fg:#ff69b4 bold'),
+            ('highlighted', 'fg:#00d4ff bold'),
+            ('selected', 'fg:#00ff00 bold'),
+        ])
+    ).ask()
+    
+    if answer:
+        return options.index(answer)
+    return 0
+
+def print_menu_table(title, items, columns=None):
+    """Imprime un menú como tabla estilo retro.
+    
+    Args:
+        title: Título de la tabla
+        items: Lista de items [{"label": "...", "description": "...", "icon": "..."}, ...]
+        columns: Lista de nombres de columnas
+    """
+    console.print(f"\n[bold {DEEP_BLUE}]╔════════════════════════════════════════╗[/bold {DEEP_BLUE}]")
+    console.print(f"[bold {GOLD}]║ {title:<38} ║[/bold {GOLD}]")
+    console.print(f"[bold {DEEP_BLUE}]╠════════════════════════════════════════╣[/bold {DEEP_BLUE}]")
+    
+    for item in items:
+        icon = item.get("icon", "  ")
+        label = item.get("label", "")
+        desc = item.get("description", "")
+        
+        line = f"║ {icon} [bold {HOT_PINK}]{label:<12}[/bold {HOT_PINK}] [cyan]{desc:<20}[/cyan] ║"
+        console.print(line)
+    
+    console.print(f"[bold {DEEP_BLUE}]╚════════════════════════════════════════╝[/bold {DEEP_BLUE}]\n")
+
+def print_loading_animation(text="Cargando"):
+    """Muestra animación de carga estilo retro."""
+    import time
+    frames = ["◰", "◳", "◲", "◱"]
+    for i in range(4):
+        console.print(f"[bold {MAGENTA}]{frames[i]}[/bold {MAGENTA}] {text}...", end="\r")
+        time.sleep(0.2)
+    console.print(f"[bold {GREEN}]✓[/bold {GREEN}] {text} completo!", end="\r")
+    console.print()
+
+def print_error_box(title, message):
+    """Imprime un cuadro de error estilo retro."""
+    panel_text = f"[bold red]⚠ {title}[/bold red]\n\n{message}"
+    panel = Panel(
+        panel_text,
+        border_style="red",
+        title="[bold red]ERROR[/bold red]",
+        padding=(1, 2)
+    )
+    console.print(panel)
+
+def print_success_box(title, message):
+    """Imprime un cuadro de éxito estilo retro."""
+    panel_text = f"[bold green]✓ {title}[/bold green]\n\n{message}"
+    panel = Panel(
+        panel_text,
+        border_style="green",
+        title="[bold green]ÉXITO[/bold green]",
+        padding=(1, 2)
+    )
+    console.print(panel)
+
+def print_info_box(title, message):
+    """Imprime un cuadro de información estilo retro."""
+    panel_text = f"[bold {CYAN}]ℹ {title}[/bold {CYAN}]\n\n{message}"
+    panel = Panel(
+        panel_text,
+        border_style=CYAN,
+        title=f"[bold {CYAN}]INFO[/bold {CYAN}]",
+        padding=(1, 2)
+    )
+    console.print(panel)

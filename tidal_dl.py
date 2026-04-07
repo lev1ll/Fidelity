@@ -6,9 +6,9 @@ import subprocess
 import shutil
 import json
 import re
-from ui import print_banner, print_section, print_status, print_welcome
+from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box
 
-__version__ = "1.7.1"
+__version__ = "1.8.0"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -407,26 +407,7 @@ def fmt_duration(seconds):
     h, m = divmod(m, 60)
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
-# ─── Banner ──────────────────────────────────────────────────────────────────
 
-def print_banner():
-    W   = 51
-    def row(text=""):
-        return f"  ║  {text:<{W}}║"
-    sep = "═" * (W + 2)
-    v   = __version__
-
-    print()
-    print(f"  ╔{sep}╗")
-    print(row())
-    print(row("  ▶  F · I · D · E · L · I · T · Y"))
-    print(row("     high  fidelity  music  downloader"))
-    print(row(f"                             by lev1ll  v{v}"))
-    print(row())
-    print(f"  ╚{sep}╝")
-    print()
-    print("  Hola! Bienvenido.")
-    print()
 
 def print_setup_instructions(download_dir):
     print("  ┌─────────────────────────────────────────────────┐")
@@ -1094,35 +1075,37 @@ def main():
     tidal_session = None
 
     while True:
-        print(f"\n  Descargas → {cfg['download_dir']}")
-        print()
-        print("  ┌─────────────────────────────────────────────────────────┐")
-        print("  │  Plataforma            Calidad          Cuenta          │")
-        print("  ├─────────────────────────────────────────────────────────┤")
-        print("  │  1. Tidal              FLAC / Video     Requerida HiFi  │")
-        print("  │  2. YouTube            Audio Opus/AAC/Video  No necesaria  │")
-        print("  ├─────────────────────────────────────────────────────────┤")
-        print("  │  c. Configuración                                       │")
-        print("  │  0. Salir                                               │")
-        print("  └─────────────────────────────────────────────────────────┘")
+        print(f"\n  [bold deep_sky_blue1]📁 Descargas:[/bold deep_sky_blue1] [gold1]{cfg['download_dir']}[/gold1]\n")
+        
+        # Menú principal con navegación por flechas
+        menu_options = [
+            "🎵 Tidal - FLAC / Video (Hi-Res 24-bit)",
+            "▶️  YouTube - Opus / AAC / Video",
+            "⚙️  Configuración",
+            "🚪 Salir"
+        ]
+        
+        choice = menu_interactive(
+            "MENÚ PRINCIPAL",
+            menu_options,
+            "Navega con ↑↓ y selecciona con ENTER"
+        )
 
-        choice = ask("\n  Elegí: ", ["0","1","2","c"])
-
-        if choice == "0":
-            print("\n  Chau! Hasta la proxima.")
+        if choice == 3:  # Salir
+            print_info_box("Hasta luego", "Gracias por usar Fidelity. ¡Nos vemos pronto!")
             break
 
-        elif choice == "c":
+        elif choice == 2:  # Configuración
             menu_settings(cfg)
             download_dir = get_download_dir(cfg)
             download_dir.mkdir(parents=True, exist_ok=True)
 
-        elif choice == "1":
+        elif choice == 0:  # Tidal
             if tidal_session is None:
                 tidal_session = get_tidal_session(download_dir)
             menu_tidal(tidal_session, download_dir)
 
-        elif choice == "2":
+        elif choice == 1:  # YouTube
             menu_youtube(download_dir)
 
 if __name__ == "__main__":

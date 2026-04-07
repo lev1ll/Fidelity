@@ -4,7 +4,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.3.2"
+__version__ = "1.3.3"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -51,15 +51,15 @@ from mutagen.mp4 import MP4, MP4Cover
 logging.basicConfig(level=logging.WARNING, format="  %(message)s")
 
 def _setup_tw_logging():
-    """Configura logging de tidal-wave para mostrar INFO y WARNING."""
+    """Configura logging de tidal-wave para ver DEBUG completo."""
     handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("  %(message)s"))
-    for name in ["tidal_wave", "tidal_wave.track", "tidal_wave.album",
-                 "tidal_wave.login", "tidal_wave.media"]:
-        lg = logging.getLogger(name)
-        lg.setLevel(logging.INFO)
-        if not lg.handlers:
-            lg.addHandler(handler)
+    handler.setFormatter(logging.Formatter("  [tw] %(name)s: %(message)s"))
+    root = logging.getLogger("tidal_wave")
+    root.setLevel(logging.DEBUG)
+    # Limpiar handlers previos para evitar duplicados
+    root.handlers.clear()
+    root.addHandler(handler)
+    root.propagate = False
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 

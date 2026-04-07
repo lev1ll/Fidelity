@@ -26,4 +26,4 @@ Homepage = "https://github.com/lev1ll/Fidelity"
 fidelity = "tidal_dl:main"
 
 [tool.setuptools]
-py-modules = ["tidal_dl"]
+py-modules = ["tidal_dl", "ui"]

@@ -9,7 +9,7 @@ import re
 import questionary
 from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
 
-__version__ = "1.9.6"
+__version__ = "1.9.7"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -65,6 +65,20 @@ def _setup_tw_logging():
     root.addHandler(handler)
     root.propagate = False
 
+def _copy_file_safe(src_path):
+    """Copia un archivo a un directorio temporal para evitar locks de Windows.
+    Retorna la ruta temporal (str) o None si falla."""
+    import tempfile
+    try:
+        suffix = src_path.suffix if hasattr(src_path, 'suffix') else ""
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        tmp.close()
+        shutil.copy2(str(src_path), tmp.name)
+        return tmp.name
+    except Exception:
+        return None
+
+
 def _auto_extract_tidal_token():
     """Extrae el token del Tidal desktop automaticamente desde IndexedDB.
 
@@ -75,54 +89,84 @@ def _auto_extract_tidal_token():
     from pathlib import Path
 
     token_file = Path.home() / "AppData" / "Local" / "tidal-wave" / "android-tidal.token"
-    
+
     # Buscar en múltiples ubicaciones posibles
     possible_dirs = [
         Path.home() / "AppData" / "Roaming" / "TIDAL" / "IndexedDB" / "https_desktop.tidal.com_0.indexeddb.leveldb",
         Path.home() / "AppData" / "Local" / "TIDAL" / "IndexedDB" / "https_desktop.tidal.com_0.indexeddb.leveldb",
+        Path.home() / "AppData" / "Roaming" / "TIDAL" / "IndexedDB" / "https_app.tidal.com_0.indexeddb.leveldb",
+        Path.home() / "AppData" / "Local" / "TIDAL" / "IndexedDB" / "https_app.tidal.com_0.indexeddb.leveldb",
+        # Local Storage — también puede tener el token
+        Path.home() / "AppData" / "Roaming" / "TIDAL" / "Local Storage" / "leveldb",
+        Path.home() / "AppData" / "Local" / "TIDAL" / "Local Storage" / "leveldb",
+        # Fallback: carpetas padre
+        Path.home() / "AppData" / "Roaming" / "TIDAL" / "IndexedDB",
+        Path.home() / "AppData" / "Local" / "TIDAL" / "IndexedDB",
+        Path.home() / "AppData" / "Roaming" / "TIDAL",
+        Path.home() / "AppData" / "Local" / "TIDAL",
     ]
 
     best_token = None
     best_exp = 0
     best_cid = "?"
+    found_dirs = []
+    skipped_locked = 0
+
+    patterns = [
+        r'"accessToken"\s*:\s*"(eyJ[A-Za-z0-9_\-\.]+)"',
+        r"'accessToken'\s*:\s*'(eyJ[A-Za-z0-9_\-\.]+)'",
+        r'accessToken"\s*:\s*"(eyJ[A-Za-z0-9_\-\.]+)',
+        r'"access_token"\s*:\s*"(eyJ[A-Za-z0-9_\-\.]+)"',
+        r'(eyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,})',
+    ]
 
     for idb_dir in possible_dirs:
         if not idb_dir.exists():
             continue
 
-        # Buscar en .log, .ldb y cualquier archivo
-        for f in idb_dir.glob("*"):
+        found_dirs.append(str(idb_dir))
+
+        try:
+            search_paths = list(idb_dir.glob("**/*")) if idb_dir.is_dir() else [idb_dir]
+        except Exception:
+            continue
+
+        for f in search_paths:
             if f.is_dir():
                 continue
+
+            # Intentar copiar a temp primero para evitar locks de Windows
+            tmp_path = _copy_file_safe(f)
+            read_path = Path(tmp_path) if tmp_path else None
+
+            if read_path is None:
+                # Si no se pudo copiar, intentar leer directamente
+                skipped_locked += 1
+                read_path = f
+
             try:
-                data = f.read_bytes().decode("utf-8", errors="ignore")
-                
-                # Múltiples patrones para encontrar tokens JWT
-                patterns = [
-                    r'"accessToken"\s*:\s*"(eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)"',
-                    r"'accessToken'\s*:\s*'(eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)'",
-                    r'accessToken":\s*"(eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)',
-                    r'"access_token"\s*:\s*"(eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)"',
-                    r'(eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)',  # Último: buscar cualquier JWT
-                ]
-                
+                try:
+                    data = read_path.read_text(encoding="utf-8", errors="ignore")
+                except Exception:
+                    data = read_path.read_bytes().decode("utf-8", errors="ignore")
+
                 for pattern in patterns:
-                    for t in re.findall(pattern, data):
+                    matches = re.findall(pattern, data)
+                    for t in matches:
                         if not t.startswith("eyJ"):
                             continue
                         try:
-                            # Validar que sea un JWT válido
                             parts = t.split(".")
                             if len(parts) != 3:
                                 continue
-                                
                             payload = parts[1]
                             payload += "=" * (4 - len(payload) % 4)
-                            decoded = json.loads(base64.b64decode(payload))
+                            try:
+                                decoded = json.loads(base64.b64decode(payload))
+                            except Exception:
+                                continue
                             exp = decoded.get("exp", 0)
                             cid = decoded.get("cid", "?")
-                            
-                            # Preferir tokens más nuevos
                             if exp > time.time() and exp > best_exp:
                                 best_token = t
                                 best_exp = exp
@@ -130,9 +174,21 @@ def _auto_extract_tidal_token():
                         except Exception:
                             continue
             except Exception:
-                continue
+                pass
+            finally:
+                if tmp_path:
+                    try:
+                        Path(tmp_path).unlink()
+                    except Exception:
+                        pass
 
     if not best_token:
+        if found_dirs:
+            print(f"\n  ℹ Carpetas buscadas: {len(found_dirs)}")
+            for d in found_dirs:
+                print(f"    · {d}")
+            if skipped_locked:
+                print(f"  ⚠ {skipped_locked} archivo(s) no pudieron copiarse (posiblemente bloqueados por el SO)")
         return False
 
     print(f" [cid={best_cid}]", end="", flush=True)
@@ -349,8 +405,14 @@ def check_for_updates():
             console.print(f"  [bold gold1]│  Nueva versión: v{latest}  (tenés v{__version__})[/bold gold1]".ljust(52) + "[bold deep_sky_blue1]│[/bold deep_sky_blue1]")
             console.print(f"  [bold deep_sky_blue1]└────────────────────────────────────────────────┘[/bold deep_sky_blue1]")
             
-            ans = input("  ¿Actualizar ahora? (s/n): ").strip().lower()
-            if ans == "s":
+            # Menú con flechas para actualizar
+            choice = menu_interactive(
+                "",
+                ["✅ Actualizar ahora", "⏭️  Hacer después"],
+                "¿Qué hacemos?"
+            )
+            
+            if choice == 0:
                 console.print("[cyan]  ⟳ Actualizando desde GitHub...[/cyan]")
                 subprocess.run(
                     [sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
@@ -436,93 +498,47 @@ def pick(items, label_fn, title=""):
     return None
 
 def pick_multi(items, label_fn, title=""):
-    """Selecciona múltiples items de forma más cómoda con opciones rápidas."""
+    """Selecciona múltiples items con checkboxes (ESPACIO para marcar, ENTER para confirmar)."""
     if not items:
         console.print("[yellow]No hay items para seleccionar.[/yellow]")
         return None
-    
+
     if title:
         console.print(f"\n[bold cyan]{title}[/bold cyan]")
-    
-    options = [label_fn(item) for item in items]
-    selected_indices = set()
-    
-    color_palette = ["hot_pink", "deep_sky_blue1", "gold1", "green1", "medium_purple", "orange1", "cyan1", "magenta"]
-    
-    # Loop de selección
-    while True:
-        # Mostrar items actuales
-        console.print("\n[bold gold1]📝 Marca los que quieras descargar:[/bold gold1]\n")
-        
-        for idx, opt in enumerate(options):
-            color = color_palette[idx % len(color_palette)]
-            icon = ["📁", "💿", "🎵", "🎸", "🎹", "🎤", "🎧", "📀"][idx % 8]
-            checkbox = "☑️ " if idx in selected_indices else "☐ "
-            
-            # Limitar largo del nombre
-            opt_short = opt[:70] + "..." if len(opt) > 70 else opt
-            console.print(f"  {checkbox} [{idx:2d}] [{color}]{icon}[/{color}] {opt_short}")
-        
-        # Mostrar resumen
-        selected_count = len(selected_indices)
-        console.print(f"\n[bold deep_sky_blue1]Seleccionados: {selected_count}/{len(options)}[/bold deep_sky_blue1]")
-        if selected_count > 0:
-            console.print(f"  [green1]✓[/green1] Listo para descargar")
-        
-        # Menú de opciones
-        console.print("\n[bold magenta]╔═ OPCIONES ═╗[/bold magenta]")
-        console.print("  [cyan]a[/cyan] = Seleccionar TODOS")
-        console.print("  [cyan]n[/cyan] = NINGUNO (deseleccionar todos)")
-        console.print("  [cyan]t[/cyan] = MOSTRAR en TABLA")
-        console.print("  [cyan]ENTER[/cyan] = Confirmar selección")
-        console.print("  [cyan]0-N[/cyan] = Marcar/desmarcar item")
-        
-        resp = input("\n  Tu opción: ").strip().lower()
-        
-        if resp == "":
-            if not selected_indices:
-                console.print("[red]❌ Debes marcar al menos un item![/red]")
-                continue
-            break
-        
-        elif resp == "a":
-            selected_indices = set(range(len(options)))
-            console.print("[green1]✓ Todos seleccionados[/green1]")
-            continue
-        
-        elif resp == "n":
-            selected_indices.clear()
-            console.print("[yellow]☐ Ninguno seleccionado[/yellow]")
-            continue
-        
-        elif resp == "t":
-            # Mostrar en tabla
-            console.print("\n[bold gold1]📊 VISTA DE TABLA[/bold gold1]\n")
-            for idx, opt in enumerate(options):
-                checkbox = "☑️" if idx in selected_indices else "☐"
-                opt_short = opt[:65] if len(opt) > 65 else opt
-                console.print(f"  {checkbox} [{idx:2d}] {opt_short}")
-            console.print()
-            continue
-        
-        else:
-            try:
-                idx = int(resp)
-                if 0 <= idx < len(options):
-                    if idx in selected_indices:
-                        selected_indices.remove(idx)
-                        console.print(f"  ☐ Item {idx} desmarcado")
-                    else:
-                        selected_indices.add(idx)
-                        console.print(f"  ☑️ Item {idx} marcado")
-                    continue
-            except ValueError:
-                pass
-        
-        console.print("[red]❌ Opción no válida (a/n/t/ENTER o número)[/red]")
-    
-    selected = [items[i] for i in sorted(selected_indices)]
-    return selected if selected else None
+
+    console.print("[bold gold1]📝 ESPACIO para marcar, ENTER para confirmar, Ctrl+C para cancelar[/bold gold1]\n")
+
+    icons = ["📁", "💿", "🎵", "🎸", "🎹", "🎤", "🎧", "📀"]
+    choices = [
+        questionary.Choice(
+            title=f"{icons[i % 8]} {label_fn(item)}",
+            value=i
+        )
+        for i, item in enumerate(items)
+    ]
+
+    try:
+        selected_indices = questionary.checkbox(
+            "Selecciona items:",
+            choices=choices,
+            style=questionary.Style([
+                ('checkbox', 'fg:#ff69b4'),
+                ('checkbox-selected', 'fg:#00ff00 bold'),
+                ('highlighted', 'fg:#00d4ff bold'),
+                ('pointer', 'fg:#ff69b4 bold'),
+            ])
+        ).ask()
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Cancelado.[/yellow]")
+        return None
+
+    if selected_indices is None:
+        return None
+    if not selected_indices:
+        console.print("[red]❌ No seleccionaste ningún item.[/red]")
+        return None
+
+    return [items[i] for i in selected_indices]
 
 def fmt_duration(seconds):
     if not seconds:

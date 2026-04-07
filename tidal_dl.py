@@ -9,7 +9,7 @@ import re
 import questionary
 from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
 
-__version__ = "1.9.2"
+__version__ = "1.9.3"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -442,20 +442,33 @@ def pick_multi(items, label_fn, title=""):
         icon = ["📁", "💿", "🎵", "🎸", "🎹", "🎤", "🎧", "📀"][idx % 8]
         console.print(f"  [{color}]{icon}[/{color}] {opt}")
     
-    answers = questionary.checkbox(
-        "\nSelecciona items (ESPACIO=marcar, ENTER=continuar):",
-        choices=options,
-        style=questionary.Style([
-            ('checked', 'fg:#00ff00 bold'),
-            ('pointer', 'fg:#ff69b4 bold'),
-            ('highlighted', 'fg:#00d4ff bold'),
-        ])
-    ).ask()
+    # Intentar múltiples veces si questionary falla
+    answers = None
+    for attempt in range(2):
+        try:
+            answers = questionary.checkbox(
+                "\nSelecciona items (ESPACIO=marcar, ENTER=continuar):",
+                choices=options,
+                skip=False,
+                validate=lambda x: True,  # Permitir selección vacía también
+                style=questionary.Style([
+                    ('checked', 'fg:#00ff00 bold'),
+                    ('pointer', 'fg:#ff69b4 bold'),
+                    ('highlighted', 'fg:#00d4ff bold'),
+                ])
+            ).ask()
+            break
+        except Exception as e:
+            if attempt == 1:
+                console.print(f"[red]Error en selección: {e}[/red]")
+                return None
     
     if answers is None:
+        console.print("[yellow]Selección cancelada.[/yellow]")
         return None
     
     if not answers:
+        print_info_box("Selección vacía", "Debes marcar al menos un item. Intentalo de nuevo.")
         return None
     
     selected = [items[options.index(ans)] for ans in answers if ans in options]

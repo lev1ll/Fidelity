@@ -73,38 +73,45 @@ def _auto_extract_tidal_token():
     from pathlib import Path
 
     token_file = Path.home() / ".config" / "tidal-wave" / "windows-tidal.token"
-    idb_dir = Path.home() / "AppData" / "Roaming" / "TIDAL" / "IndexedDB" / \
-              "https_desktop.tidal.com_0.indexeddb.leveldb"
-
-    if not idb_dir.exists():
-        return False
+    
+    # Buscar en múltiples ubicaciones posibles
+    possible_dirs = [
+        Path.home() / "AppData" / "Roaming" / "TIDAL" / "IndexedDB" / "https_desktop.tidal.com_0.indexeddb.leveldb",
+        Path.home() / "AppData" / "Local" / "TIDAL" / "IndexedDB" / "https_desktop.tidal.com_0.indexeddb.leveldb",
+    ]
 
     best_token = None
     best_exp = 0
+    best_cid = "?"
 
-    # Buscar en .log y .ldb
-    for pattern in ("*.log", "*.ldb"):
-        for f in idb_dir.glob(pattern):
-            try:
-                data = f.read_bytes().decode("utf-8", errors="ignore")
-                for t in re.findall(
-                    r'accessToken":"(eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)',
-                    data
-                ):
-                    try:
-                        payload = t.split(".")[1]
-                        payload += "=" * (4 - len(payload) % 4)
-                        decoded = json.loads(base64.b64decode(payload))
-                        exp = decoded.get("exp", 0)
-                        cid = decoded.get("cid", "?")
-                        if exp > time.time() and exp > best_exp:
-                            best_token = t
-                            best_exp = exp
-                            best_cid = cid
-                    except Exception:
-                        continue
-            except Exception:
-                continue
+    for idb_dir in possible_dirs:
+        if not idb_dir.exists():
+            continue
+
+        # Buscar en .log y .ldb
+        for pattern in ("*.log", "*.ldb"):
+            for f in idb_dir.glob(pattern):
+                try:
+                    data = f.read_bytes().decode("utf-8", errors="ignore")
+                    # Buscar tokens o en formato JSON o en string literal
+                    for t in re.findall(
+                        r'(?:accessToken|access_token)["\']?\s*[:=]\s*["\']?(eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)',
+                        data
+                    ):
+                        try:
+                            payload = t.split(".")[1]
+                            payload += "=" * (4 - len(payload) % 4)
+                            decoded = json.loads(base64.b64decode(payload))
+                            exp = decoded.get("exp", 0)
+                            cid = decoded.get("cid", "?")
+                            if exp > time.time() and exp > best_exp:
+                                best_token = t
+                                best_exp = exp
+                                best_cid = cid
+                        except Exception:
+                            continue
+                except Exception:
+                    continue
 
     if not best_token:
         return False
@@ -509,16 +516,46 @@ def get_tw_session():
             print(".", end="", flush=True)
             time.sleep(1)
     
+    # Si no encuentra automáticamente, permitir ingreso manual
     if not found:
         print(" no encontrado.")
         print()
-        print("  ✗ No se pudo extraer token Hi-Res del Tidal desktop.")
-        print("  Asegúrate de:")
-        print("    • Tener la app Tidal instalada y abierta")
-        print("    • Estar logueado con cuenta HiFi/HiFi Plus")
-        print("    • Haber descargado al menos una canción Hi-Res")
-        print()
-        raise RuntimeError("Token Hi-Res no disponible")
+        print("  ¿Querés ingresar el token manualmente?")
+        print("  1. Sí, ingresar token")
+        print("  2. No, cancelar")
+        choice = input("  Elegí: ").strip()
+        
+        if choice == "1":
+            print()
+            manual_token = input("  Pegá el access token JWT: ").strip()
+            if manual_token.startswith("eyJ"):
+                try:
+                    # Validar que sea un JWT válido
+                    payload = manual_token.split(".")[1]
+                    payload += "=" * (4 - len(payload) % 4)
+                    decoded = json.loads(base64.b64decode(payload))
+                    exp = decoded.get("exp", 0)
+                    if exp > time.time():
+                        token_file.parent.mkdir(parents=True, exist_ok=True)
+                        token_data = json.dumps({"access_token": manual_token})
+                        token_file.write_bytes(base64.b64encode(token_data.encode("utf-8")))
+                        found = True
+                        print("  ✓ Token guardado!")
+                    else:
+                        print("  ✗ Token expirado")
+                except Exception as e:
+                    print(f"  ✗ Token inválido: {e}")
+            else:
+                print("  ✗ No parece un JWT válido")
+        
+        if not found:
+            print()
+            print("  ✗ No se pudo obtener token Hi-Res.")
+            print("  Asegúrate de:")
+            print("    • Tener la app Tidal abierta y logueado con HiFi/HiFi Plus")
+            print("    • Haber descargado al menos una canción Hi-Res recientemente")
+            print()
+            raise RuntimeError("Token Hi-Res no disponible")
 
     try:
         # Cargar token del archivo

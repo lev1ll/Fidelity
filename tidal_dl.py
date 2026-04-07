@@ -159,7 +159,51 @@ def _patch_tidal_wave():
 
     XMLDASHManifest.build_urls = _fixed_build_urls
 
-    # ── Fix 2: barra de progreso en download_url ──────────────────────────────
+    # ── Fix 2: barra de progreso en download_urls (DASH segments) ────────────
+    def _download_urls_with_progress(self, session):
+        from tidal_wave.temporary import temporary_file
+        import shutil, ffmpeg
+        from pathlib import Path as _Path
+        from Crypto.Cipher import AES
+        from Crypto.Util import Counter
+
+        total = len(self.urls)
+        with temporary_file(suffix=".mp4") as ntf:
+            for i, u in enumerate(self.urls, 1):
+                pct = i / total * 100
+                bar = "█" * int(pct / 5) + "░" * (20 - int(pct / 5))
+                print(f"\r  [{bar}] {pct:5.1f}%  ({i}/{total})", end="", flush=True)
+                with session.get(url=u, headers=self.download_headers, params=self.download_params) as resp:
+                    if not resp.ok:
+                        print()
+                        return None
+                    ntf.write(resp.content)
+            print(f"\r  [{'█'*20}] 100.0%  — procesando...      ", flush=True)
+            ntf.seek(0)
+
+            if (self.manifest.key is not None) and (self.manifest.nonce is not None):
+                counter = Counter.new(64, prefix=self.manifest.nonce, initial_value=0)
+                decryptor = AES.new(self.manifest.key, AES.MODE_CTR, counter=counter)
+                with temporary_file(suffix=".mp4") as f_dec:
+                    f_dec.write(decryptor.decrypt(_Path(ntf.name).read_bytes()))
+                    if self.codec == "flac":
+                        ffmpeg.input(f_dec.name, hide_banner=None, y=None).output(
+                            self.absolute_outfile, acodec="copy", loglevel="quiet").run()
+                    elif self.codec == "m4a":
+                        shutil.copyfile(f_dec.name, self.outfile)
+            else:
+                if self.codec == "flac":
+                    ffmpeg.input(ntf.name, hide_banner=None, y=None).output(
+                        self.absolute_outfile, acodec="copy", loglevel="quiet").run()
+                elif self.codec == "m4a":
+                    shutil.copyfile(ntf.name, self.outfile)
+
+            print(f"\r  [{'█'*20}] 100.0%  ✓                         ")
+            return self.outfile
+
+    TWTrack.download_urls = _download_urls_with_progress
+
+    # ── Fix 3: barra de progreso en download_url (BTS/single URL) ────────────
     _orig_download_url = TWTrack.download_url
 
     def _download_url_with_progress(self, session, out_dir):

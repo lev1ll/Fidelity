@@ -9,7 +9,7 @@ import re
 import questionary
 from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
 
-__version__ = "1.9.8"
+__version__ = "1.9.9"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -383,8 +383,15 @@ def get_download_dir(cfg):
 
 # ─── Auto-update ─────────────────────────────────────────────────────────────
 
+_UPDATE_FLAG = Path.home() / ".musicdl" / ".just_updated"
+
 def check_for_updates():
     """Verifica si hay nueva versión en GitHub y ofrece actualizar."""
+    # Si acabamos de actualizar en este arranque, no volver a preguntar
+    if _UPDATE_FLAG.exists():
+        _UPDATE_FLAG.unlink(missing_ok=True)
+        return
+
     try:
         r = requests.get(
             f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
@@ -392,15 +399,14 @@ def check_for_updates():
         )
         if r.status_code != 200:
             return
-        
+
         data = r.json()
-        tag_name = data.get("tag_name", "")   # e.g. "v1.9.7"
-        latest = tag_name.lstrip("v")          # e.g. "1.9.7" para comparar
+        tag_name = data.get("tag_name", "")   # e.g. "v1.9.8"
+        latest = tag_name.lstrip("v")          # e.g. "1.9.8" para comparar
 
         if not latest:
             return
 
-        # Comparar versiones como tuplas para evitar errores de string comparison
         def _ver(s):
             try:
                 return tuple(int(x) for x in s.split("."))
@@ -426,6 +432,9 @@ def check_for_updates():
                     check=False
                 )
                 if result.returncode == 0:
+                    # Escribir flag antes de reiniciar para no volver a preguntar
+                    _UPDATE_FLAG.parent.mkdir(parents=True, exist_ok=True)
+                    _UPDATE_FLAG.touch()
                     console.print("[green1]  ✓ Actualizado! Reiniciando...[/green1]")
                     subprocess.run([sys.executable] + sys.argv)
                     sys.exit()

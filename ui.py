@@ -5,6 +5,7 @@ from rich.panel import Panel
 from rich.text import Text
 from rich.align import Align
 from rich.table import Table
+import pyfiglet
 
 console = Console()
 
@@ -16,28 +17,42 @@ BLUE = "blue"
 WHITE = "white"
 
 def print_banner():
-    """Banner épico estilo TRON - Alternativo minimalista."""
-    text = """
-    ╔══════════════════════════════════════════╗
-    ║                                          ║
-    ║          ⚡  F I D E L I T Y  ⚡        ║
-    ║                                          ║
-    ║      Cyberpunk Music Downloader         ║
-    ║                                          ║
-    ║     Tidal • YouTube • Multi-Platform    ║
-    ║                                          ║
-    ╚══════════════════════════════════════════╝
+    """Banner épico estilo Gemini con ASCII art grande."""
+    
+    # Crear ASCII art grande con pyfiglet
+    fig = pyfiglet.Figlet(font='slant', width=100)
+    ascii_text = fig.renderText('FIDELITY')
+    
+    # Líneas decorativas
+    banner_text = f"""
+{ascii_text}
+    ⚡  C Y B E R P U N K   M U S I C   D O W N L O A D E R  ⚡
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    
+    Tidal Hi-Res 24-bit  •  YouTube Opus  •  Multi-Platform
+    
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     """
     
-    panel_text = Text(text, style=f"bold {CYAN}")
-    panel = Panel(
-        panel_text,
-        border_style=MAGENTA,
-        title="[bold magenta]⚡ TRON MODE ⚡[/bold magenta]",
-        title_align="center",
-        padding=(0, 1)
-    )
-    console.print(panel)
+    # Aplicar estilos de color - cada línea con color diferente
+    lines = banner_text.split('\n')
+    styled_lines = []
+    
+    for i, line in enumerate(lines):
+        if 'FIDELITY' in line:
+            styled_lines.append(f"[bold {MAGENTA}]{line}[/bold {MAGENTA}]")
+        elif '⚡' in line:
+            styled_lines.append(f"[bold {CYAN}]{line}[/bold {CYAN}]")
+        elif '━' in line:
+            styled_lines.append(f"[{PURPLE}]{line}[/{PURPLE}]")
+        elif line.strip():
+            styled_lines.append(f"[{CYAN}]{line}[/{CYAN}]")
+        else:
+            styled_lines.append(line)
+    
+    styled_banner = '\n'.join(styled_lines)
+    console.print(styled_banner)
     console.print()
 
 def print_section(title, subtitle=""):

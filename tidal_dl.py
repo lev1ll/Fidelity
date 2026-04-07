@@ -6,8 +6,9 @@ import subprocess
 import shutil
 import json
 import re
+from ui import print_banner, print_section, print_status, print_welcome
 
-__version__ = "1.6.0"
+__version__ = "1.7.0"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────

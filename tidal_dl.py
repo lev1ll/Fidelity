@@ -7,7 +7,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.5.2"
+__version__ = "1.6.0"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -564,8 +564,7 @@ def tidal_download_track(session, track, dest_dir, album=None, num=None, total=N
     print(f"\n  {prefix}{artist} - {track.name}")
     print("  Descargando...", flush=True)
 
-    tw_session = get_tw_session()
-    _setup_tw_logging()
+    tw_session = session  # Usar sesión pasada (no llamar get_tw_session)
     tw_track = TWTrack(track_id=track.id)
     try:
         result = tw_track.get(
@@ -586,23 +585,62 @@ def tidal_download_track(session, track, dest_dir, album=None, num=None, total=N
 def tidal_download_album(session, album, dest_base):
     from tidal_wave.album import Album as TWAlbum
     from tidal_wave.media import AudioFormat as TWAudioFormat
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    folder = dest_base / "Tidal"
+    folder = dest_base / "Tidal" / sanitize(album.name)
     folder.mkdir(parents=True, exist_ok=True)
 
     print(f"\n  Descargando album: {album.name}")
-    print("  (tidal-wave mostrará el progreso track a track)\n")
+    print("  (descargando hasta 3 tracks simultáneamente)\n")
+    
     tw_session = get_tw_session()
     _setup_tw_logging()
+    
     try:
         tw_album = TWAlbum(album_id=album.id)
-        tw_album.get(
-            session=tw_session,
-            audio_format=TWAudioFormat.hi_res,
-            out_dir=folder,
-            no_extra_files=True,
-        )
-        print(f"\n  ✓ Album descargado en: {folder}")
+        # Obtener lista de tracks
+        tracks = list(tw_album.tracks())
+        total_tracks = len(tracks)
+        
+        def download_single_track(track_info):
+            """Descarga un track individual"""
+            track, num = track_info
+            try:
+                artist = ", ".join(a.name for a in track.artists) if track.artists else "Unknown"
+                print(f"  [{num}/{total_tracks}] {artist} - {track.name}...", flush=True)
+                
+                from tidal_wave.track import Track as TWTrack
+                tw_track = TWTrack(track_id=track.id)
+                result = tw_track.get(
+                    session=tw_session,
+                    audio_format=TWAudioFormat.hi_res,
+                    out_dir=folder,
+                    no_extra_files=True,
+                )
+                
+                if result:
+                    size = result.stat().st_size / 1024 / 1024
+                    print(f"  ✓ [{num}/{total_tracks}] {size:.1f} MB")
+                    return True
+                else:
+                    print(f"  ✗ [{num}/{total_tracks}] No se descargó")
+                    return False
+            except Exception as e:
+                print(f"  ✗ [{num}/{total_tracks}] Error: {str(e)[:50]}")
+                return False
+        
+        # Descargar en paralelo (máximo 3 simultáneos)
+        downloaded = 0
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {
+                executor.submit(download_single_track, (t, i)): i 
+                for i, t in enumerate(tracks, 1)
+            }
+            for future in as_completed(futures):
+                if future.result():
+                    downloaded += 1
+        
+        print(f"\n  ✓ Album descargado: {downloaded}/{total_tracks} tracks en {folder}")
     except Exception as e:
         print(f"\n  ✗ Error: {e}")
 

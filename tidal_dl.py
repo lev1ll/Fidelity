@@ -7,7 +7,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.4.9"
+__version__ = "1.5.0"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -512,17 +512,12 @@ def get_tw_session():
     
     ensure_installed(["tidal-wave", "cachecontrol"])
     import time
-    import base64
-    import json
-    import requests
-    from cachecontrol import CacheControl
     _patch_tidal_wave()
 
-    token_file = Path.home() / ".config" / "tidal-wave" / "windows-tidal.token"
     print()
     print("  Buscando token Hi-Res del Tidal desktop...", end="", flush=True)
     
-    # Reintentar extracción con delay (Tidal desktop puede estar escribiendo el token)
+    # Reintentar extracción con delay
     found = False
     for attempt in range(3):
         if _auto_extract_tidal_token():
@@ -533,65 +528,26 @@ def get_tw_session():
             print(".", end="", flush=True)
             time.sleep(1)
     
-    # Si no encuentra automáticamente, permitir ingreso manual
     if not found:
         print(" no encontrado.")
         print()
-        print("  ¿Querés ingresar el token manualmente?")
-        print("  1. Sí, ingresar token")
-        print("  2. No, cancelar")
-        choice = input("  Elegí: ").strip()
-        
-        if choice == "1":
-            print()
-            manual_token = input("  Pegá el access token JWT: ").strip()
-            if manual_token.startswith("eyJ"):
-                try:
-                    # Validar que sea un JWT válido
-                    payload = manual_token.split(".")[1]
-                    payload += "=" * (4 - len(payload) % 4)
-                    decoded = json.loads(base64.b64decode(payload))
-                    exp = decoded.get("exp", 0)
-                    if exp > time.time():
-                        token_file.parent.mkdir(parents=True, exist_ok=True)
-                        token_data = json.dumps({"access_token": manual_token})
-                        token_file.write_bytes(base64.b64encode(token_data.encode("utf-8")))
-                        found = True
-                        print("  ✓ Token guardado!")
-                    else:
-                        print("  ✗ Token expirado")
-                except Exception as e:
-                    print(f"  ✗ Token inválido: {e}")
-            else:
-                print("  ✗ No parece un JWT válido")
-        
-        if not found:
-            print()
-            print("  ✗ No se pudo obtener token Hi-Res.")
-            print("  Asegúrate de:")
-            print("    • Tener la app Tidal abierta y logueado con HiFi/HiFi Plus")
-            print("    • Haber descargado al menos una canción Hi-Res recientemente")
-            print()
-            raise RuntimeError("Token Hi-Res no disponible")
+        print("  ✗ No se pudo extraer token Hi-Res del Tidal desktop.")
+        print("  Asegúrate de:")
+        print("    • Tener la app Tidal instalada y abierta")
+        print("    • Estar logueado con cuenta HiFi/HiFi Plus")
+        print("    • Haber descargado al menos una canción Hi-Res")
+        print()
+        raise RuntimeError("Token Hi-Res no disponible")
 
     try:
-        # Cargar token del archivo
-        token_data = json.loads(
-            base64.b64decode(token_file.read_bytes()).decode("utf-8")
-        )
-        access_token = token_data.get("access_token")
-        if not access_token:
-            raise RuntimeError("Token vacío en archivo")
+        # Usar tidal-wave.login_android para que configure la sesión correctamente
+        from tidal_wave.login import login_android
         
-        # Crear sesión con requests que usa el token del Tidal desktop
-        session = requests.Session()
-        session.headers.update({
-            "X-Tidal-Token": access_token,
-            "Authorization": f"Bearer {access_token}"
-        })
+        session = login_android()
+        if session is None:
+            raise RuntimeError("Sesión Hi-Res inválida")
         
-        # Envolver con CacheControl para mejor rendimiento
-        _tw_session = CacheControl(session)
+        _tw_session = session
         print("  ✓ Sesion Hi-Res lista!")
         return _tw_session
     except Exception as e:

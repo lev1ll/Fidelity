@@ -394,38 +394,46 @@ def check_for_updates():
             return
         
         data = r.json()
-        latest = data.get("tag_name", "").lstrip("v")
-        
+        tag_name = data.get("tag_name", "")   # e.g. "v1.9.7"
+        latest = tag_name.lstrip("v")          # e.g. "1.9.7" para comparar
+
         if not latest:
             return
-        
-        # Comparar versiones
-        if latest != __version__:
+
+        # Comparar versiones como tuplas para evitar errores de string comparison
+        def _ver(s):
+            try:
+                return tuple(int(x) for x in s.split("."))
+            except Exception:
+                return (0,)
+
+        if _ver(latest) > _ver(__version__):
             console.print(f"\n  [bold deep_sky_blue1]┌─ Actualización disponible ─────────────────────┐[/bold deep_sky_blue1]")
             console.print(f"  [bold gold1]│  Nueva versión: v{latest}  (tenés v{__version__})[/bold gold1]".ljust(52) + "[bold deep_sky_blue1]│[/bold deep_sky_blue1]")
             console.print(f"  [bold deep_sky_blue1]└────────────────────────────────────────────────┘[/bold deep_sky_blue1]")
-            
-            # Menú con flechas para actualizar
+
             choice = menu_interactive(
                 "",
                 ["✅ Actualizar ahora", "⏭️  Hacer después"],
                 "¿Qué hacemos?"
             )
-            
+
             if choice == 0:
                 console.print("[cyan]  ⟳ Actualizando desde GitHub...[/cyan]")
-                subprocess.run(
+                result = subprocess.run(
                     [sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
-                     f"git+https://github.com/{GITHUB_REPO}.git@{latest}"],
+                     f"git+https://github.com/{GITHUB_REPO}.git@{tag_name}"],
                     check=False
                 )
-                console.print("[green1]  ✓ Actualizado! Reiniciando...[/green1]")
-                subprocess.run([sys.executable] + sys.argv)
-                sys.exit()
+                if result.returncode == 0:
+                    console.print("[green1]  ✓ Actualizado! Reiniciando...[/green1]")
+                    subprocess.run([sys.executable] + sys.argv)
+                    sys.exit()
+                else:
+                    console.print("[red]  ✗ Error al actualizar. Revisá tu conexión o instalá manualmente.[/red]")
     except requests.exceptions.RequestException:
         pass  # Sin internet
-    except Exception as e:
-        # Log silencioso de errores
+    except Exception:
         pass
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────

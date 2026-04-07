@@ -7,7 +7,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.4.3"
+__version__ = "1.4.4"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -561,24 +561,71 @@ def tidal_download_album(session, album, dest_base):
     except Exception as e:
         print(f"\n  ✗ Error: {e}")
 
+_TIDAL_VIDEO_QUALITIES = [
+    ("Alta",  "1080p", "high"),
+    ("Media",  "720p", "medium"),
+    ("Baja",   "480p", "low"),
+]
+
+def tidal_download_video(session, video, dest_dir):
+    ensure_installed(["yt-dlp"])
+    print(f"\n  {video.name}  —  {video.artist.name if video.artist else '?'}")
+    print(f"  Duración: {fmt_duration(video.duration)}")
+    print()
+    print("  Calidad de video:")
+    for i, (label, res, _) in enumerate(_TIDAL_VIDEO_QUALITIES, 1):
+        print(f"  {i}. {label:<6}  {res}")
+    print("  0. Cancelar")
+
+    sel = ask("\n  Elegí: ", ["0","1","2","3"])
+    if sel == "0":
+        return
+
+    _, _, quality_key = _TIDAL_VIDEO_QUALITIES[int(sel) - 1]
+    orig_quality = session.config.video_quality
+    session.config.video_quality = getattr(tidalapi.VideoQuality, quality_key)
+    try:
+        m3u8_url = video.get_url()
+    except Exception as e:
+        print(f"  ✗ No se pudo obtener la URL: {e}")
+        session.config.video_quality = orig_quality
+        return
+    session.config.video_quality = orig_quality
+
+    import yt_dlp
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    title = sanitize(f"{video.artist.name if video.artist else 'Unknown'} - {video.name}")
+    opts = {
+        "format": "bestvideo+bestaudio/best",
+        "outtmpl": str(dest_dir / f"{title}.%(ext)s"),
+        "merge_output_format": "mp4",
+        "quiet": False,
+        "no_warnings": True,
+    }
+    print()
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        ydl.download([m3u8_url])
+    print(f"\n  ✓ Guardado en: {dest_dir}")
+
 def menu_tidal(session, download_dir):
     while True:
         print("\n  ── Tidal ─────────────────────────────────────────")
-        print("  Calidad: Lossless FLAC / Hi-Res · Requiere cuenta HiFi")
+        print("  Calidad: Lossless FLAC / Hi-Res / Video · Requiere cuenta HiFi")
         print()
         print("  1. Buscar artista")
         print("  2. Buscar album")
         print("  3. Buscar track")
-        print("  4. Pegar URL de Tidal")
-        print("  5. Cerrar sesion (logout)")
+        print("  4. Buscar video")
+        print("  5. Pegar URL de Tidal")
+        print("  6. Cerrar sesion (logout)")
         print("  0. Volver")
 
-        choice = ask("\n  Elegí: ", ["0","1","2","3","4","5"])
+        choice = ask("\n  Elegí: ", ["0","1","2","3","4","5","6"])
 
         if choice == "0":
             break
 
-        elif choice == "5":
+        elif choice == "6":
             if SESSION_FILE.exists():
                 SESSION_FILE.unlink()
                 print("\n  ✓ Sesion cerrada.")
@@ -673,6 +720,24 @@ def menu_tidal(session, download_dir):
                     tidal_download_track(session, track, folder, album, i, len(selected))
 
         elif choice == "4":
+            query = input("\n  Nombre del video: ").strip()
+            if not query:
+                continue
+            results = session.search(query, models=[tidalapi.media.Video], limit=10)
+            videos = results.get("videos", [])
+            if not videos:
+                print("\n  No se encontraron videos.")
+                continue
+            video = pick(
+                videos,
+                lambda v: f"{v.name}  [{fmt_duration(v.duration)}]  — {v.artist.name if v.artist else '?'}",
+                "  Videos encontrados:"
+            )
+            if video:
+                folder = download_dir / "Tidal" / "Videos"
+                tidal_download_video(session, video, folder)
+
+        elif choice == "5":
             url = input("\n  Pegá el link de Tidal: ").strip()
             if "track/" in url:
                 m = re.search(r"track/(\d+)", url)
@@ -698,6 +763,12 @@ def menu_tidal(session, download_dir):
                     for i, track in enumerate(tracks, 1):
                         album = session.album(track.album.id) if track.album else None
                         tidal_download_track(session, track, folder, album, i, len(tracks))
+            elif "video/" in url:
+                m = re.search(r"video/(\d+)", url)
+                if m:
+                    video = session.video(int(m.group(1)))
+                    folder = download_dir / "Tidal" / "Videos"
+                    tidal_download_video(session, video, folder)
             else:
                 print("\n  URL no reconocida.")
 
@@ -942,7 +1013,7 @@ def main():
         print("  ┌─────────────────────────────────────────────────────────┐")
         print("  │  Plataforma            Calidad          Cuenta          │")
         print("  ├─────────────────────────────────────────────────────────┤")
-        print("  │  1. Tidal              Lossless FLAC    Requerida HiFi  │")
+        print("  │  1. Tidal              FLAC / Video     Requerida HiFi  │")
         print("  │  2. YouTube            Audio FLAC/Video  No necesaria    │")
         print("  ├─────────────────────────────────────────────────────────┤")
         print("  │  c. Configuración                                       │")

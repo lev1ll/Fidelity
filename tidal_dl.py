@@ -9,7 +9,7 @@ import re
 import questionary
 from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
 
-__version__ = "2.0.2"
+__version__ = "2.0.3"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -425,21 +425,59 @@ def check_for_updates():
             )
 
             if choice == 0:
-                console.print("[cyan]  ⟳ Actualizando desde GitHub...[/cyan]")
-                result = subprocess.run(
-                    [sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
-                     f"git+https://github.com/{GITHUB_REPO}.git@{tag_name}"],
-                    check=False
+                console.print("[cyan]  ⟳ Preparando actualización...[/cyan]")
+
+                # Escribir flag para no volver a preguntar al reiniciar
+                _UPDATE_FLAG.parent.mkdir(parents=True, exist_ok=True)
+                _UPDATE_FLAG.touch()
+
+                # En Windows, fidelity.exe está bloqueado mientras corre.
+                # Solución: lanzar un script separado que espera el cierre,
+                # instala y relanza — todo desde un proceso independiente.
+                import tempfile, textwrap
+
+                install_url = f"git+https://github.com/{GITHUB_REPO}.git@{tag_name}"
+                fidelity_exe = shutil.which("fidelity") or "fidelity"
+
+                updater_code = textwrap.dedent(f"""\
+                    import subprocess, sys, time, os
+
+                    time.sleep(2)  # Esperar que fidelity.exe libere el lock
+
+                    result = subprocess.run(
+                        [sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir",
+                         "{install_url}"],
+                        capture_output=True, text=True
+                    )
+
+                    if result.returncode == 0:
+                        subprocess.Popen([r"{fidelity_exe}"],
+                                         creationflags=subprocess.DETACHED_PROCESS |
+                                                       subprocess.CREATE_NEW_PROCESS_GROUP)
+                    else:
+                        print("Error al actualizar:")
+                        print(result.stderr[-800:] if result.stderr else "(sin detalle)")
+                        input("Presiona Enter para cerrar...")
+                    try:
+                        os.unlink(__file__)
+                    except Exception:
+                        pass
+                """)
+
+                tmp = tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".py", delete=False, encoding="utf-8"
                 )
-                if result.returncode == 0:
-                    # Escribir flag antes de reiniciar para no volver a preguntar
-                    _UPDATE_FLAG.parent.mkdir(parents=True, exist_ok=True)
-                    _UPDATE_FLAG.touch()
-                    console.print("[green1]  ✓ Actualizado! Reiniciando...[/green1]")
-                    subprocess.run([sys.executable] + sys.argv)
-                    sys.exit()
-                else:
-                    console.print("[red]  ✗ Error al actualizar. Revisá tu conexión o instalá manualmente.[/red]")
+                tmp.write(updater_code)
+                tmp.close()
+
+                subprocess.Popen(
+                    [sys.executable, tmp.name],
+                    creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+                    close_fds=True,
+                )
+
+                console.print("[green1]  ✓ Actualizando en segundo plano... cerrando.[/green1]")
+                sys.exit(0)
     except requests.exceptions.RequestException:
         pass  # Sin internet
     except Exception:

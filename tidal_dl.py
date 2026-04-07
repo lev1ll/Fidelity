@@ -4,7 +4,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -43,9 +43,12 @@ check_and_install()
 
 import tidalapi
 import requests
+import logging
 from pathlib import Path
 from mutagen.flac import FLAC, Picture
 from mutagen.mp4 import MP4, MP4Cover
+
+logging.basicConfig(level=logging.INFO, format="  %(message)s")
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -280,6 +283,7 @@ def tidal_download_track(session, track, dest_dir, album=None, num=None, total=N
     prefix = f"[{num}/{total}] " if num else ""
     artist = ", ".join(a.name for a in track.artists)
     print(f"\n  {prefix}{artist} - {track.name}")
+    print("  Descargando...", flush=True)
 
     tw_session = get_tw_session()
     tw_track = TWTrack(track_id=track.id)
@@ -292,8 +296,20 @@ def tidal_download_track(session, track, dest_dir, album=None, num=None, total=N
     if result:
         size = result.stat().st_size / 1024 / 1024
         print(f"  ✓ {size:.1f} MB — {result.suffix.lstrip('.').upper()}")
+        print(f"  → {result}")
     else:
-        print("  ✗ No se pudo descargar.")
+        print("  ✗ No se pudo descargar (intentando calidad menor)...")
+        # Fallback a lossless si hi_res no está disponible
+        result = tw_track.get(
+            session=tw_session,
+            audio_format=TWAudioFormat.lossless,
+            out_dir=dest_dir,
+            no_extra_files=True,
+        )
+        if result:
+            size = result.stat().st_size / 1024 / 1024
+            print(f"  ✓ {size:.1f} MB — {result.suffix.lstrip('.').upper()} [lossless]")
+            print(f"  → {result}")
 
 def tidal_download_album(session, album, dest_base):
     from tidal_wave.album import Album as TWAlbum
@@ -303,6 +319,7 @@ def tidal_download_album(session, album, dest_base):
     folder.mkdir(parents=True, exist_ok=True)
 
     print(f"\n  Descargando album: {album.name}")
+    print("  (tidal-wave mostrará el progreso track a track)\n")
     tw_session = get_tw_session()
     tw_album = TWAlbum(album_id=album.id)
     tw_album.get(

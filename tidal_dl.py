@@ -4,7 +4,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.3.1"
+__version__ = "1.3.2"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -48,7 +48,18 @@ from pathlib import Path
 from mutagen.flac import FLAC, Picture
 from mutagen.mp4 import MP4, MP4Cover
 
-logging.basicConfig(level=logging.INFO, format="  %(message)s")
+logging.basicConfig(level=logging.WARNING, format="  %(message)s")
+
+def _setup_tw_logging():
+    """Configura logging de tidal-wave para mostrar INFO y WARNING."""
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("  %(message)s"))
+    for name in ["tidal_wave", "tidal_wave.track", "tidal_wave.album",
+                 "tidal_wave.login", "tidal_wave.media"]:
+        lg = logging.getLogger(name)
+        lg.setLevel(logging.INFO)
+        if not lg.handlers:
+            lg.addHandler(handler)
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -286,30 +297,23 @@ def tidal_download_track(session, track, dest_dir, album=None, num=None, total=N
     print("  Descargando...", flush=True)
 
     tw_session = get_tw_session()
+    _setup_tw_logging()
     tw_track = TWTrack(track_id=track.id)
-    result = tw_track.get(
-        session=tw_session,
-        audio_format=TWAudioFormat.hi_res,
-        out_dir=dest_dir,
-        no_extra_files=True,
-    )
-    if result:
-        size = result.stat().st_size / 1024 / 1024
-        print(f"  ✓ {size:.1f} MB — {result.suffix.lstrip('.').upper()}")
-        print(f"  → {result}")
-    else:
-        print("  ✗ No se pudo descargar (intentando calidad menor)...")
-        # Fallback a lossless si hi_res no está disponible
+    try:
         result = tw_track.get(
             session=tw_session,
-            audio_format=TWAudioFormat.lossless,
+            audio_format=TWAudioFormat.hi_res,
             out_dir=dest_dir,
             no_extra_files=True,
         )
         if result:
             size = result.stat().st_size / 1024 / 1024
-            print(f"  ✓ {size:.1f} MB — {result.suffix.lstrip('.').upper()} [lossless]")
+            print(f"  ✓ {size:.1f} MB — {result.suffix.lstrip('.').upper()}")
             print(f"  → {result}")
+        else:
+            print("  ✗ No se pudo descargar.")
+    except Exception as e:
+        print(f"  ✗ Error: {e}")
 
 def tidal_download_album(session, album, dest_base):
     from tidal_wave.album import Album as TWAlbum
@@ -321,14 +325,18 @@ def tidal_download_album(session, album, dest_base):
     print(f"\n  Descargando album: {album.name}")
     print("  (tidal-wave mostrará el progreso track a track)\n")
     tw_session = get_tw_session()
-    tw_album = TWAlbum(album_id=album.id)
-    tw_album.get(
-        session=tw_session,
-        audio_format=TWAudioFormat.hi_res,
-        out_dir=folder,
-        no_extra_files=True,
-    )
-    print(f"\n  ✓ Album descargado en: {folder}")
+    _setup_tw_logging()
+    try:
+        tw_album = TWAlbum(album_id=album.id)
+        tw_album.get(
+            session=tw_session,
+            audio_format=TWAudioFormat.hi_res,
+            out_dir=folder,
+            no_extra_files=True,
+        )
+        print(f"\n  ✓ Album descargado en: {folder}")
+    except Exception as e:
+        print(f"\n  ✗ Error: {e}")
 
 def menu_tidal(session, download_dir):
     while True:

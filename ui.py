@@ -16,32 +16,26 @@ BLUE = "blue"
 WHITE = "white"
 
 def print_banner():
-    """Banner épico estilo TRON."""
-    # Crear text con gradiente de colores
-    banner_text = Text()
-    
-    # FIDELITY
-    colors = [CYAN, "cyan3", "blue", PURPLE, MAGENTA]
-    text = "╔═══════════════════════════════════════════╗\n"
-    text += "║                                           ║\n"
-    text += "║  ███████╗██╗██████╗ ███████╗██╗     ██╗  ║\n"
-    text += "║  ██╔════╝██║██╔══██╗██╔════╝██║     ██║  ║\n"
-    text += "║  █████╗  ██║██║  ██║█████╗  ██║     ██║  ║\n"
-    text += "║  ██╔══╝  ██║██║  ██║██╔══╝  ██║     ██║  ║\n"
-    text += "║  ██║     ██║██████╔╝███████╗███████╗██║  ║\n"
-    text += "║  ╚═╝     ╚═╝╚═════╝ ╚══════╝╚══════╝╚═╝  ║\n"
-    text += "║                                           ║\n"
-    text += "║     Multi-platform Music Downloader      ║\n"
-    text += "║                                           ║\n"
-    text += "╚═══════════════════════════════════════════╝"
+    """Banner épico estilo TRON - Alternativo minimalista."""
+    text = """
+    ╔══════════════════════════════════════════╗
+    ║                                          ║
+    ║          ⚡  F I D E L I T Y  ⚡        ║
+    ║                                          ║
+    ║      Cyberpunk Music Downloader         ║
+    ║                                          ║
+    ║     Tidal • YouTube • Multi-Platform    ║
+    ║                                          ║
+    ╚══════════════════════════════════════════╝
+    """
     
     panel_text = Text(text, style=f"bold {CYAN}")
     panel = Panel(
         panel_text,
         border_style=MAGENTA,
-        title="[bold cyan]⚡ TRON MODE ⚡[/bold cyan]",
+        title="[bold magenta]⚡ TRON MODE ⚡[/bold magenta]",
         title_align="center",
-        padding=(0, 2)
+        padding=(0, 1)
     )
     console.print(panel)
     console.print()

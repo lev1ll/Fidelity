@@ -7,7 +7,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.5.1"
+__version__ = "1.5.2"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -439,7 +439,7 @@ def print_setup_instructions(download_dir):
     print("    https://ffmpeg.org/download.html")
     print()
     print("  Cuentas necesarias por plataforma:")
-    print("  · Tidal   → Cuenta HiFi o HiFi Plus")
+    print("  · Tidal   → Cuenta HiFi o HiFi Plus (app abierta)")
     print("  · YouTube → Sin cuenta")
     print()
     print(f"  Descargas en: {download_dir}")
@@ -655,7 +655,9 @@ def tidal_download_video(session, video, dest_dir):
 def menu_tidal(session, download_dir):
     while True:
         print("\n  ── Tidal ─────────────────────────────────────────")
-        print("  Calidad: Lossless FLAC / Hi-Res / Video · Requiere cuenta HiFi")
+        print("  Calidad: FLAC Lossless 16-bit / Hi-Res 24-bit")
+        print("  · Requiere: Tidal app abierta + HiFi/HiFi Plus")
+        print("  · Token: se extrae automático (sin navegador)")
         print()
         print("  1. Buscar artista")
         print("  2. Buscar album")

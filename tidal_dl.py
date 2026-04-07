@@ -9,7 +9,7 @@ import re
 import questionary
 from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
 
-__version__ = "2.0.1"
+__version__ = "2.0.2"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -526,43 +526,30 @@ def pick_multi(items, label_fn, title=""):
     color_palette = ["hot_pink", "deep_sky_blue1", "gold1", "green1", "medium_purple", "orange1", "cyan1", "magenta"]
     icons = ["📁", "💿", "🎵", "🎸", "🎹", "🎤", "🎧", "📀"]
 
-    # Tabla con estilo
-    table = Table(
-        show_header=True,
-        header_style="bold deep_sky_blue1",
-        border_style="deep_sky_blue1",
-        show_lines=True,
-        expand=False,
-        title=f"[bold gold1]{title}[/bold gold1]" if title else None,
-        title_style="bold gold1",
-    )
-    table.add_column("#", style="bold white", justify="right", width=4)
-    table.add_column("", width=3)
-    table.add_column("Nombre", style="white", min_width=40, max_width=65)
+    # Header estilo banner
+    console.print()
+    console.print(f"[bold deep_sky_blue1]▓▓▓[/bold deep_sky_blue1] [bold hot_pink]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold hot_pink] [bold deep_sky_blue1]▓▓▓[/bold deep_sky_blue1]")
+    if title:
+        console.print(f"  [bold gold1]◈  {title}[/bold gold1]")
+    console.print(f"[bold deep_sky_blue1]▓▓▓[/bold deep_sky_blue1] [bold hot_pink]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold hot_pink] [bold deep_sky_blue1]▓▓▓[/bold deep_sky_blue1]")
+    console.print()
 
+    # Lista de items con colores alternos
     for i, item in enumerate(items):
         color = color_palette[i % len(color_palette)]
         icon = icons[i % len(icons)]
         label = label_fn(item)
-        label_short = label[:65] + "…" if len(label) > 65 else label
-        table.add_row(
-            f"[bold {color}]{i + 1}[/bold {color}]",
-            icon,
-            label_short,
+        label_short = label[:68] + "…" if len(label) > 68 else label
+        console.print(
+            f"  [bold deep_sky_blue1][[/bold deep_sky_blue1][bold {color}]{i + 1:2d}[/bold {color}][bold deep_sky_blue1]][/bold deep_sky_blue1] "
+            f"{icon} [bold {color}]{label_short}[/bold {color}]"
         )
 
     console.print()
-    console.print(table)
-    console.print(
-        Panel(
-            "[bold white]Escribe los números separados por comas[/bold white]  [dim]ej: 1,3,5[/dim]\n"
-            "[bold white]'a'[/bold white] para seleccionar [bold green1]todos[/bold green1]   "
-            "[bold white]Enter[/bold white] para cancelar",
-            border_style="hot_pink",
-            padding=(0, 2),
-            expand=False,
-        )
-    )
+    console.print(f"[bold deep_sky_blue1]╔══════════════════════════════════════════════════╗[/bold deep_sky_blue1]")
+    console.print(f"[bold deep_sky_blue1]║[/bold deep_sky_blue1]  [bold hot_pink]Números separados por comas[/bold hot_pink]  [medium_purple]ej: 1,3,5[/medium_purple]          [bold deep_sky_blue1]║[/bold deep_sky_blue1]")
+    console.print(f"[bold deep_sky_blue1]║[/bold deep_sky_blue1]  [bold gold1]'a'[/bold gold1] → todos   [bold gold1]Enter[/bold gold1] → cancelar                 [bold deep_sky_blue1]║[/bold deep_sky_blue1]")
+    console.print(f"[bold deep_sky_blue1]╚══════════════════════════════════════════════════╝[/bold deep_sky_blue1]")
 
     try:
         resp = input("  ❯ ").strip().lower()

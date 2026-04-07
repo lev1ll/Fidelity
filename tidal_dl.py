@@ -7,7 +7,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.5.0"
+__version__ = "1.5.1"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -72,7 +72,7 @@ def _auto_extract_tidal_token():
     import re, base64, json, time
     from pathlib import Path
 
-    token_file = Path.home() / ".config" / "tidal-wave" / "windows-tidal.token"
+    token_file = Path.home() / "AppData" / "Local" / "tidal-wave" / "android-tidal.token"
     
     # Buscar en múltiples ubicaciones posibles
     possible_dirs = [

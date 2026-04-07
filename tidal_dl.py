@@ -9,7 +9,7 @@ import re
 import questionary
 from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
 
-__version__ = "1.9.4"
+__version__ = "1.9.5"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -424,7 +424,7 @@ def pick(items, label_fn, title=""):
     return None
 
 def pick_multi(items, label_fn, title=""):
-    """Selecciona múltiples items de forma manual e interactiva."""
+    """Selecciona múltiples items de forma más cómoda con opciones rápidas."""
     if not items:
         console.print("[yellow]No hay items para seleccionar.[/yellow]")
         return None
@@ -432,66 +432,83 @@ def pick_multi(items, label_fn, title=""):
     if title:
         console.print(f"\n[bold cyan]{title}[/bold cyan]")
     
-    # Crear opciones con labels
     options = [label_fn(item) for item in items]
-    
-    # Estado: qué items están seleccionados
     selected_indices = set()
     
-    # Mostrar opciones iniciales con colores
     color_palette = ["hot_pink", "deep_sky_blue1", "gold1", "green1", "medium_purple", "orange1", "cyan1", "magenta"]
-    
-    console.print("\n[bold gold1]📝 Marca/desmarca con ESPACIO, confirma con ENTER[/bold gold1]\n")
     
     # Loop de selección
     while True:
+        # Mostrar items actuales
+        console.print("\n[bold gold1]📝 Marca los que quieras descargar:[/bold gold1]\n")
+        
         for idx, opt in enumerate(options):
             color = color_palette[idx % len(color_palette)]
             icon = ["📁", "💿", "🎵", "🎸", "🎹", "🎤", "🎧", "📀"][idx % 8]
-            
-            # Mostrar ☑️ o ☐ según si está seleccionado
             checkbox = "☑️ " if idx in selected_indices else "☐ "
-            console.print(f"  {checkbox} [{color}]{icon}[/{color}] {opt}")
-        
-        # Menú para seleccionar
-        menu_opts = list(range(len(options))) + ["✅ Confirmar seleccion", "❌ Cancelar"]
-        choice_labels = [f"  [{i}] Marcar/desmarcar" for i in range(len(options))] + ["✅ Confirmar seleccion", "❌ Cancelar"]
-        
-        console.print("\n[bold deep_sky_blue1]Opciones:[/bold deep_sky_blue1]")
-        for i, label in enumerate(choice_labels):
-            console.print(f"  {label}")
-        
-        try:
-            enter = input("\n  Escribe número o presiona ENTER para confirmar: ").strip()
             
-            if enter == "" or enter.lower() == "confirmar":
-                # Confirmar selección
-                if not selected_indices:
-                    console.print("[yellow]⚠ Debes marcar al menos un item![/yellow]\n")
-                    continue
-                break
-            elif enter.lower() == "cancelar" or enter == "❌":
-                return None
-            
+            # Limitar largo del nombre
+            opt_short = opt[:70] + "..." if len(opt) > 70 else opt
+            console.print(f"  {checkbox} [{idx:2d}] [{color}]{icon}[/{color}] {opt_short}")
+        
+        # Mostrar resumen
+        selected_count = len(selected_indices)
+        console.print(f"\n[bold deep_sky_blue1]Seleccionados: {selected_count}/{len(options)}[/bold deep_sky_blue1]")
+        if selected_count > 0:
+            console.print(f"  [green1]✓[/green1] Listo para descargar")
+        
+        # Menú de opciones
+        console.print("\n[bold magenta]╔═ OPCIONES ═╗[/bold magenta]")
+        console.print("  [cyan]a[/cyan] = Seleccionar TODOS")
+        console.print("  [cyan]n[/cyan] = NINGUNO (deseleccionar todos)")
+        console.print("  [cyan]t[/cyan] = MOSTRAR en TABLA")
+        console.print("  [cyan]ENTER[/cyan] = Confirmar selección")
+        console.print("  [cyan]0-N[/cyan] = Marcar/desmarcar item")
+        
+        resp = input("\n  Tu opción: ").strip().lower()
+        
+        if resp == "":
+            if not selected_indices:
+                console.print("[red]❌ Debes marcar al menos un item![/red]")
+                continue
+            break
+        
+        elif resp == "a":
+            selected_indices = set(range(len(options)))
+            console.print("[green1]✓ Todos seleccionados[/green1]")
+            continue
+        
+        elif resp == "n":
+            selected_indices.clear()
+            console.print("[yellow]☐ Ninguno seleccionado[/yellow]")
+            continue
+        
+        elif resp == "t":
+            # Mostrar en tabla
+            console.print("\n[bold gold1]📊 VISTA DE TABLA[/bold gold1]\n")
+            for idx, opt in enumerate(options):
+                checkbox = "☑️" if idx in selected_indices else "☐"
+                opt_short = opt[:65] if len(opt) > 65 else opt
+                console.print(f"  {checkbox} [{idx:2d}] {opt_short}")
+            console.print()
+            continue
+        
+        else:
             try:
-                idx = int(enter)
+                idx = int(resp)
                 if 0 <= idx < len(options):
-                    # Toggle selección
                     if idx in selected_indices:
                         selected_indices.remove(idx)
+                        console.print(f"  ☐ Item {idx} desmarcado")
                     else:
                         selected_indices.add(idx)
-                    console.print()  # Nueva línea para claridad
+                        console.print(f"  ☑️ Item {idx} marcado")
                     continue
             except ValueError:
                 pass
-            
-            console.print("[red]❌ Opción no válida[/red]\n")
-        except KeyboardInterrupt:
-            console.print("\n[yellow]Cancelado.[/yellow]")
-            return None
+        
+        console.print("[red]❌ Opción no válida (a/n/t/ENTER o número)[/red]")
     
-    # Retornar items seleccionados
     selected = [items[i] for i in sorted(selected_indices)]
     return selected if selected else None
 

@@ -7,7 +7,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.4.4"
+__version__ = "1.4.5"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -859,7 +859,7 @@ def yt_download(url, dest_dir, format_id=None):
     postprocessors = []
     if has_ffmpeg:
         postprocessors += [
-            {"key": "FFmpegExtractAudio", "preferredcodec": "flac"},
+            {"key": "FFmpegExtractAudio", "preferredcodec": "opus"},
             {"key": "FFmpegMetadata"},
         ]
     opts = {

@@ -9,7 +9,7 @@ import re
 import questionary
 from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
 
-__version__ = "1.9.3"
+__version__ = "1.9.4"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -424,7 +424,7 @@ def pick(items, label_fn, title=""):
     return None
 
 def pick_multi(items, label_fn, title=""):
-    """Selecciona múltiples items usando menú con flechas y checkboxes."""
+    """Selecciona múltiples items de forma manual e interactiva."""
     if not items:
         console.print("[yellow]No hay items para seleccionar.[/yellow]")
         return None
@@ -435,43 +435,64 @@ def pick_multi(items, label_fn, title=""):
     # Crear opciones con labels
     options = [label_fn(item) for item in items]
     
-    # Mostrar opciones con colores
+    # Estado: qué items están seleccionados
+    selected_indices = set()
+    
+    # Mostrar opciones iniciales con colores
     color_palette = ["hot_pink", "deep_sky_blue1", "gold1", "green1", "medium_purple", "orange1", "cyan1", "magenta"]
-    for idx, opt in enumerate(options):
-        color = color_palette[idx % len(color_palette)]
-        icon = ["📁", "💿", "🎵", "🎸", "🎹", "🎤", "🎧", "📀"][idx % 8]
-        console.print(f"  [{color}]{icon}[/{color}] {opt}")
     
-    # Intentar múltiples veces si questionary falla
-    answers = None
-    for attempt in range(2):
+    console.print("\n[bold gold1]📝 Marca/desmarca con ESPACIO, confirma con ENTER[/bold gold1]\n")
+    
+    # Loop de selección
+    while True:
+        for idx, opt in enumerate(options):
+            color = color_palette[idx % len(color_palette)]
+            icon = ["📁", "💿", "🎵", "🎸", "🎹", "🎤", "🎧", "📀"][idx % 8]
+            
+            # Mostrar ☑️ o ☐ según si está seleccionado
+            checkbox = "☑️ " if idx in selected_indices else "☐ "
+            console.print(f"  {checkbox} [{color}]{icon}[/{color}] {opt}")
+        
+        # Menú para seleccionar
+        menu_opts = list(range(len(options))) + ["✅ Confirmar seleccion", "❌ Cancelar"]
+        choice_labels = [f"  [{i}] Marcar/desmarcar" for i in range(len(options))] + ["✅ Confirmar seleccion", "❌ Cancelar"]
+        
+        console.print("\n[bold deep_sky_blue1]Opciones:[/bold deep_sky_blue1]")
+        for i, label in enumerate(choice_labels):
+            console.print(f"  {label}")
+        
         try:
-            answers = questionary.checkbox(
-                "\nSelecciona items (ESPACIO=marcar, ENTER=continuar):",
-                choices=options,
-                skip=False,
-                validate=lambda x: True,  # Permitir selección vacía también
-                style=questionary.Style([
-                    ('checked', 'fg:#00ff00 bold'),
-                    ('pointer', 'fg:#ff69b4 bold'),
-                    ('highlighted', 'fg:#00d4ff bold'),
-                ])
-            ).ask()
-            break
-        except Exception as e:
-            if attempt == 1:
-                console.print(f"[red]Error en selección: {e}[/red]")
+            enter = input("\n  Escribe número o presiona ENTER para confirmar: ").strip()
+            
+            if enter == "" or enter.lower() == "confirmar":
+                # Confirmar selección
+                if not selected_indices:
+                    console.print("[yellow]⚠ Debes marcar al menos un item![/yellow]\n")
+                    continue
+                break
+            elif enter.lower() == "cancelar" or enter == "❌":
                 return None
+            
+            try:
+                idx = int(enter)
+                if 0 <= idx < len(options):
+                    # Toggle selección
+                    if idx in selected_indices:
+                        selected_indices.remove(idx)
+                    else:
+                        selected_indices.add(idx)
+                    console.print()  # Nueva línea para claridad
+                    continue
+            except ValueError:
+                pass
+            
+            console.print("[red]❌ Opción no válida[/red]\n")
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Cancelado.[/yellow]")
+            return None
     
-    if answers is None:
-        console.print("[yellow]Selección cancelada.[/yellow]")
-        return None
-    
-    if not answers:
-        print_info_box("Selección vacía", "Debes marcar al menos un item. Intentalo de nuevo.")
-        return None
-    
-    selected = [items[options.index(ans)] for ans in answers if ans in options]
+    # Retornar items seleccionados
+    selected = [items[i] for i in sorted(selected_indices)]
     return selected if selected else None
 
 def fmt_duration(seconds):

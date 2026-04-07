@@ -7,7 +7,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.4.6"
+__version__ = "1.4.7"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -481,18 +481,19 @@ def get_tidal_session(download_dir):
     return session
 
 def get_tw_session():
-    """Sesion de tidal-wave para descarga Hi-Res 24-bit."""
+    """Sesion de tidal-wave para descarga Hi-Res 24-bit usando token del Tidal desktop."""
     global _tw_session
     if _tw_session is not None:
         return _tw_session
+    
     ensure_installed(["tidal-wave", "cachecontrol"])
-    from tidal_wave.login import login as tw_login
-    from tidal_wave.media import AudioFormat as TWAudioFormat
-    from cachecontrol import CacheControl
     import time
+    import base64
+    import json
+    import requests
+    from cachecontrol import CacheControl
     _patch_tidal_wave()
 
-    # Siempre re-extraer token del Tidal desktop para asegurarse que no expiró
     token_file = Path.home() / ".config" / "tidal-wave" / "windows-tidal.token"
     print()
     print("  Buscando token Hi-Res del Tidal desktop...", end="", flush=True)
@@ -510,26 +511,38 @@ def get_tw_session():
     
     if not found:
         print(" no encontrado.")
-        if not token_file.exists():
-            print()
-            print("  ✗ No se pudo extraer token Hi-Res del Tidal desktop.")
-            print("  Asegúrate de:")
-            print("    • Tener la app Tidal instalada y abierta")
-            print("    • Estar logueado con cuenta HiFi/HiFi Plus")
-            print("    • Haber descargado al menos una canción Hi-Res")
-            print()
-            raise RuntimeError("Token Hi-Res no disponible")
+        print()
+        print("  ✗ No se pudo extraer token Hi-Res del Tidal desktop.")
+        print("  Asegúrate de:")
+        print("    • Tener la app Tidal instalada y abierta")
+        print("    • Estar logueado con cuenta HiFi/HiFi Plus")
+        print("    • Haber descargado al menos una canción Hi-Res")
+        print()
+        raise RuntimeError("Token Hi-Res no disponible")
 
     try:
-        session, _ = tw_login(audio_format=TWAudioFormat.hi_res)
-        if session is None:
-            raise RuntimeError("Sesión Hi-Res inválida")
+        # Cargar token del archivo
+        token_data = json.loads(
+            base64.b64decode(token_file.read_bytes()).decode("utf-8")
+        )
+        access_token = token_data.get("access_token")
+        if not access_token:
+            raise RuntimeError("Token vacío en archivo")
+        
+        # Crear sesión con requests que usa el token del Tidal desktop
+        session = requests.Session()
+        session.headers.update({
+            "X-Tidal-Token": access_token,
+            "Authorization": f"Bearer {access_token}"
+        })
+        
+        # Envolver con CacheControl para mejor rendimiento
         _tw_session = CacheControl(session)
         print("  ✓ Sesion Hi-Res lista!")
         return _tw_session
     except Exception as e:
         print(f"  ✗ Error en sesión Hi-Res: {e}")
-        print("  Intenta cerrar sesión (logout) y loguearte nuevamente.")
+        print("  Intenta cerrar sesión (logout) y loguearte nuevamente en Tidal desktop.")
         raise
 
 def tidal_download_track(session, track, dest_dir, album=None, num=None, total=None):

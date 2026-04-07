@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fidelity-dl"
-version = "1.9.0"
+version = "1.9.1"
 description = "Multi-platform music downloader"
 requires-python = ">=3.10"
 dependencies = [
@@ -26,4 +26,4 @@ Homepage = "https://github.com/lev1ll/Fidelity"
 fidelity = "tidal_dl:main"
 
 [tool.setuptools]
-py-modules = ["tidal_dl", "ui"]
+py-modules = ["tidal_dl", "ui", "progress_bar"]

@@ -7,7 +7,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.3.3"
+__version__ = "1.3.4"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -54,15 +54,64 @@ from mutagen.mp4 import MP4, MP4Cover
 logging.basicConfig(level=logging.WARNING, format="  %(message)s")
 
 def _setup_tw_logging():
-    """Configura logging de tidal-wave para ver DEBUG completo."""
+    """Configura logging de tidal-wave para ver INFO y WARNING."""
     handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("  [tw] %(name)s: %(message)s"))
+    handler.setFormatter(logging.Formatter("  [tw] %(message)s"))
     root = logging.getLogger("tidal_wave")
-    root.setLevel(logging.DEBUG)
-    # Limpiar handlers previos para evitar duplicados
+    root.setLevel(logging.INFO)
     root.handlers.clear()
     root.addHandler(handler)
     root.propagate = False
+
+def _patch_tidal_wave():
+    """Parchea build_urls de XMLDASHManifest para que no cuelgue.
+
+    El loop original solo corta con HTTP 500. Si el CDN devuelve 403/404
+    para segmentos inexistentes, el loop corre para siempre.
+    """
+    import re as _re
+    from tidal_wave.dash import XMLDASHManifest
+
+    def _fixed_build_urls(self, session):
+        if len(self.segment_timeline.s) == 0:
+            return None
+
+        def sub_n(n, p=r"\$Number\$", s=self.media):
+            return _re.sub(p, str(n), s)
+
+        try:
+            r = next(S.r for S in self.segment_timeline.s)
+        except StopIteration:
+            r = None
+
+        if r is None:
+            urls_list = [self.initialization]
+            number = 1
+            while number < 10000:
+                try:
+                    code = session.head(url=sub_n(number), timeout=10).status_code
+                except Exception:
+                    break
+                if code >= 400:
+                    break
+                urls_list.append(sub_n(number))
+                number += 1
+            return urls_list
+
+        urls_list = [self.initialization] + [sub_n(i) for i in range(self.startNumber, r + 1)]
+        number = r + 1
+        while number < 10000:
+            try:
+                code = session.head(url=sub_n(number), timeout=10).status_code
+            except Exception:
+                break
+            if code >= 400:
+                break
+            urls_list.append(sub_n(number))
+            number += 1
+        return urls_list
+
+    XMLDASHManifest.build_urls = _fixed_build_urls
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -280,6 +329,7 @@ def get_tw_session():
     from tidal_wave.login import login as tw_login
     from tidal_wave.media import AudioFormat as TWAudioFormat
     from cachecontrol import CacheControl
+    _patch_tidal_wave()
     print()
     print("  ── Autenticación Hi-Res (tidal-wave) ────────────────")
     print("  Esta sesión permite descargar en 24-bit.")

@@ -9,7 +9,7 @@ import re
 import questionary
 from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, print_error_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
 
-__version__ = "2.0.7"
+__version__ = "2.0.8"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -548,8 +548,7 @@ def pick(items, label_fn, title=""):
     color_palette = ["hot_pink", "deep_sky_blue1", "gold1", "green1", "medium_purple", "orange1", "cyan1", "magenta"]
     for idx, opt in enumerate(options):
         color = color_palette[idx % len(color_palette)]
-        icon = ["🎵", "🎸", "🎹", "🎤", "🎧", "📀", "🎼", "🌟"][idx % 8]
-        console.print(f"  [{color}]{icon}[/{color}] {opt}")
+        console.print(f"  [{color}]▶[/{color}] {opt}")
     
     options.append("🚪 Volver")
     
@@ -584,7 +583,6 @@ def pick_multi(items, label_fn, title=""):
         return None
 
     color_palette = ["hot_pink", "deep_sky_blue1", "gold1", "green1", "medium_purple", "orange1", "cyan1", "magenta"]
-    icons = ["📁", "💿", "🎵", "🎸", "🎹", "🎤", "🎧", "📀"]
 
     # Header estilo banner
     console.print()
@@ -594,15 +592,14 @@ def pick_multi(items, label_fn, title=""):
     console.print(f"[bold deep_sky_blue1]▓▓▓[/bold deep_sky_blue1] [bold hot_pink]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold hot_pink] [bold deep_sky_blue1]▓▓▓[/bold deep_sky_blue1]")
     console.print()
 
-    # Lista de items con colores alternos
+    # Lista de items con colores alternos — icono fijo 💿
     for i, item in enumerate(items):
         color = color_palette[i % len(color_palette)]
-        icon = icons[i % len(icons)]
         label = label_fn(item)
         label_short = label[:68] + "…" if len(label) > 68 else label
         console.print(
             f"  [bold deep_sky_blue1][[/bold deep_sky_blue1][bold {color}]{i + 1:2d}[/bold {color}][bold deep_sky_blue1]][/bold deep_sky_blue1] "
-            f"{icon} [bold {color}]{label_short}[/bold {color}]"
+            f"💿 [bold {color}]{label_short}[/bold {color}]"
         )
 
     console.print()

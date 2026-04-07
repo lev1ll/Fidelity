@@ -4,7 +4,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -233,7 +233,7 @@ def get_tidal_session(download_dir):
     if first_time:
         print_setup_instructions(download_dir)
 
-    config = tidalapi.Config(quality=tidalapi.Quality.high_lossless)
+    config = tidalapi.Config(quality=tidalapi.Quality.hi_res_lossless)
     session = tidalapi.Session(config)
 
     if SESSION_FILE.exists():
@@ -386,9 +386,17 @@ def menu_tidal(session, download_dir):
             if not all_items:
                 print("\n  No se encontraron releases.")
                 continue
+            def _release_label(a):
+                q = getattr(a, "audio_quality", None) or ""
+                q_tag = ""
+                if "HI_RES" in q.upper():
+                    q_tag = " [24-bit Hi-Res]"
+                elif "LOSSLESS" in q.upper():
+                    q_tag = " [16-bit FLAC]"
+                return f"{a.name} ({a.release_date.year if a.release_date else '?'}) — {a.num_tracks} tracks{q_tag}"
             selected = pick_multi(
                 all_items,
-                lambda a: f"{a.name} ({a.release_date.year if a.release_date else '?'}) — {a.num_tracks} tracks",
+                _release_label,
                 "  Releases disponibles:"
             )
             if selected:
@@ -404,9 +412,19 @@ def menu_tidal(session, download_dir):
             if not albums:
                 print("\n  No se encontraron albums.")
                 continue
-            album = pick(albums,
-                lambda a: f"{a.name} — {a.artist.name} ({a.release_date.year if a.release_date else '?'})",
-                "  Albums encontrados:")
+            def _album_quality_label(a):
+                q = getattr(a, "audio_quality", None) or ""
+                q_tag = ""
+                if "HI_RES" in q.upper():
+                    q_tag = " [24-bit Hi-Res]"
+                elif "LOSSLESS" in q.upper():
+                    q_tag = " [16-bit FLAC]"
+                return f"{a.name} — {a.artist.name} ({a.release_date.year if a.release_date else '?'}){q_tag}"
+            albums_sorted = sorted(
+                albums,
+                key=lambda a: 0 if "HI_RES" in (getattr(a, "audio_quality", "") or "").upper() else 1
+            )
+            album = pick(albums_sorted, _album_quality_label, "  Albums encontrados (ordenados por calidad):")
             if album:
                 tidal_download_album(session, album, download_dir)
 
@@ -567,25 +585,16 @@ def menu_youtube(download_dir):
 
         print(f"\n  {info.get('title','?')}  —  {info.get('channel') or info.get('uploader','?')}")
         print(f"  Duración: {fmt_duration(info.get('duration'))}")
-        print()
 
-        format_id = None
-        if fmts:
-            print("  Formatos de audio disponibles:")
-            for i, f in enumerate(fmts, 1):
-                size = f" (~{f['filesize']/1024/1024:.0f} MB)" if f['filesize'] else ""
-                print(f"  {i}. {f['codec'].upper()}  {f['abr']}kbps  .{f['ext']}{size}")
-            print("  0. Cancelar")
-            print()
-            sel = input("  Elegí formato (o Enter para el mejor): ").strip()
-            if sel == "0":
-                continue
-            if sel.isdigit() and 1 <= int(sel) <= len(fmts):
-                format_id = fmts[int(sel)-1]["format_id"]
+        best = fmts[0] if fmts else None
+        if best:
+            size = f" (~{best['filesize']/1024/1024:.0f} MB)" if best['filesize'] else ""
+            print(f"  Calidad: {best['codec'].upper()}  {best['abr']}kbps  .{best['ext']}{size}  ★ mejor disponible")
+        print()
 
         dest = download_dir / "YouTube"
         dest.mkdir(parents=True, exist_ok=True)
-        print()
+        format_id = best["format_id"] if best else None
         yt_download(url, dest, format_id)
         print(f"\n  ✓ Guardado en: {dest}")
 

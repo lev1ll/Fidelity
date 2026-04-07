@@ -7,7 +7,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.4.5"
+__version__ = "1.4.6"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -897,7 +897,7 @@ def menu_youtube(download_dir):
         print("\n  ── YouTube ───────────────────────────────────────")
         print("  Catálogo enorme: conciertos, lives, rarezas · Sin cuenta")
         if check_ffmpeg():
-            print("  Audio: Opus/AAC → FLAC  |  Video: hasta 4K · necesita ffmpeg ✓")
+            print("  Audio: Opus/AAC  |  Video: hasta 4K · necesita ffmpeg ✓")
         else:
             print("  Audio: mejor nativo · Video: requiere ffmpeg (no encontrado)")
         print()
@@ -944,7 +944,7 @@ def menu_youtube(download_dir):
         print(f"  Duración: {fmt_duration(info.get('duration'))}")
         print()
         print("  ¿Qué querés descargar?")
-        print("  1. Solo audio  (FLAC)")
+        print("  1. Solo audio  (Opus/AAC)")
         print("  2. Video       (MP4  · video + mejor audio)")
         print("  0. Cancelar")
 
@@ -1014,7 +1014,7 @@ def main():
         print("  │  Plataforma            Calidad          Cuenta          │")
         print("  ├─────────────────────────────────────────────────────────┤")
         print("  │  1. Tidal              FLAC / Video     Requerida HiFi  │")
-        print("  │  2. YouTube            Audio FLAC/Video  No necesaria    │")
+        print("  │  2. YouTube            Audio Opus/AAC/Video  No necesaria  │")
         print("  ├─────────────────────────────────────────────────────────┤")
         print("  │  c. Configuración                                       │")
         print("  │  0. Salir                                               │")

@@ -7,7 +7,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.4.8"
+__version__ = "1.4.9"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -88,30 +88,47 @@ def _auto_extract_tidal_token():
         if not idb_dir.exists():
             continue
 
-        # Buscar en .log y .ldb
-        for pattern in ("*.log", "*.ldb"):
-            for f in idb_dir.glob(pattern):
-                try:
-                    data = f.read_bytes().decode("utf-8", errors="ignore")
-                    # Buscar tokens o en formato JSON o en string literal
-                    for t in re.findall(
-                        r'(?:accessToken|access_token)["\']?\s*[:=]\s*["\']?(eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)',
-                        data
-                    ):
+        # Buscar en .log, .ldb y cualquier archivo
+        for f in idb_dir.glob("*"):
+            if f.is_dir():
+                continue
+            try:
+                data = f.read_bytes().decode("utf-8", errors="ignore")
+                
+                # Múltiples patrones para encontrar tokens JWT
+                patterns = [
+                    r'"accessToken"\s*:\s*"(eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)"',
+                    r"'accessToken'\s*:\s*'(eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)'",
+                    r'accessToken":\s*"(eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)',
+                    r'"access_token"\s*:\s*"(eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)"',
+                    r'(eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)',  # Último: buscar cualquier JWT
+                ]
+                
+                for pattern in patterns:
+                    for t in re.findall(pattern, data):
+                        if not t.startswith("eyJ"):
+                            continue
                         try:
-                            payload = t.split(".")[1]
+                            # Validar que sea un JWT válido
+                            parts = t.split(".")
+                            if len(parts) != 3:
+                                continue
+                                
+                            payload = parts[1]
                             payload += "=" * (4 - len(payload) % 4)
                             decoded = json.loads(base64.b64decode(payload))
                             exp = decoded.get("exp", 0)
                             cid = decoded.get("cid", "?")
+                            
+                            # Preferir tokens más nuevos
                             if exp > time.time() and exp > best_exp:
                                 best_token = t
                                 best_exp = exp
                                 best_cid = cid
                         except Exception:
                             continue
-                except Exception:
-                    continue
+            except Exception:
+                continue
 
     if not best_token:
         return False

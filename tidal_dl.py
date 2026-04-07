@@ -4,7 +4,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.2.1"
+__version__ = "1.3.0"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -228,6 +228,8 @@ def menu_settings(cfg):
 
 # ─── TIDAL ───────────────────────────────────────────────────────────────────
 
+_tw_session = None
+
 def get_tidal_session(download_dir):
     first_time = not SESSION_FILE.exists()
     if first_time:
@@ -252,103 +254,64 @@ def get_tidal_session(download_dir):
     print("  ✓ Sesion guardada!")
     return session
 
-def tidal_embed_cover(dest_path, cover_url):
-    try:
-        r = requests.get(cover_url)
-        if r.status_code != 200:
-            return
-        cover_data = r.content
-        if str(dest_path).endswith(".flac"):
-            audio = FLAC(dest_path)
-            pic = Picture()
-            pic.data = cover_data
-            pic.type = 3
-            pic.mime = "image/jpeg"
-            audio.add_picture(pic)
-            audio.save()
-        elif str(dest_path).endswith(".m4a"):
-            audio = MP4(dest_path)
-            audio["covr"] = [MP4Cover(cover_data, imageformat=MP4Cover.FORMAT_JPEG)]
-            audio.save()
-    except Exception:
-        pass
-
-def tidal_embed_tags(dest_path, track, album=None):
-    try:
-        if str(dest_path).endswith(".flac"):
-            audio = FLAC(dest_path)
-            audio["title"] = track.name
-            audio["artist"] = ", ".join(a.name for a in track.artists)
-            if album:
-                audio["album"] = album.name
-                audio["albumartist"] = album.artist.name if album.artist else ""
-                audio["date"] = str(album.release_date.year) if album.release_date else ""
-                audio["tracknumber"] = str(getattr(track, "track_num", ""))
-            audio.save()
-    except Exception:
-        pass
-
-def tidal_download_file(url, dest_path):
-    r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, stream=True)
-    if r.status_code != 200:
-        raise Exception(f"HTTP {r.status_code}")
-    total = int(r.headers.get("content-length", 0))
-    downloaded = 0
-    with open(dest_path, "wb") as f:
-        for chunk in r.iter_content(8192):
-            f.write(chunk)
-            downloaded += len(chunk)
-            if total:
-                print(f"\r  Descargando... {downloaded/total*100:.0f}%", end="", flush=True)
+def get_tw_session():
+    """Sesion de tidal-wave para descarga Hi-Res 24-bit."""
+    global _tw_session
+    if _tw_session is not None:
+        return _tw_session
+    ensure_installed(["tidal-wave", "cachecontrol"])
+    from tidal_wave.login import login as tw_login
+    from tidal_wave.media import AudioFormat as TWAudioFormat
+    from cachecontrol import CacheControl
     print()
+    print("  ── Autenticación Hi-Res (tidal-wave) ────────────────")
+    print("  Esta sesión permite descargar en 24-bit.")
+    print("  Seguí las instrucciones en pantalla.")
+    print()
+    session, _ = tw_login(audio_format=TWAudioFormat.hi_res)
+    _tw_session = CacheControl(session)
+    print("  ✓ Sesion Hi-Res lista!")
+    return _tw_session
 
 def tidal_download_track(session, track, dest_dir, album=None, num=None, total=None):
+    from tidal_wave.track import Track as TWTrack
+    from tidal_wave.media import AudioFormat as TWAudioFormat
+
     prefix = f"[{num}/{total}] " if num else ""
     artist = ", ".join(a.name for a in track.artists)
-    track_num = str(getattr(track, "track_num", 0)).zfill(2)
-    filename = sanitize(f"{track_num}. {artist} - {track.name}")
-
-    # get_stream() respeta la calidad Hi-Res del config; get_url() siempre devuelve 16-bit
-    quality_label = ""
-    try:
-        stream = track.get_stream()
-        manifest = stream.get_stream_manifest()
-        url = manifest.get_urls()[0]
-        ext = (manifest.file_extension or "").lstrip(".") or (
-            "m4a" if "mp4" in url.split("?")[0] else "flac"
-        )
-        quality_label = f"{stream.bit_depth}bit/{stream.sample_rate // 1000}kHz"
-    except Exception:
-        url = track.get_url()
-        ext = "m4a" if "mp4" in url.split("?")[0] else "flac"
-
-    dest_path = dest_dir / f"{filename}.{ext}"
-
-    if dest_path.exists():
-        print(f"  {prefix}Ya existe: {filename}.{ext}")
-        return
-
     print(f"\n  {prefix}{artist} - {track.name}")
-    tidal_download_file(url, dest_path)
 
-    if album:
-        try:
-            tidal_embed_cover(dest_path, album.image(1280))
-        except Exception:
-            pass
-    tidal_embed_tags(dest_path, track, album)
-    q_tag = f" [{quality_label}]" if quality_label else ""
-    print(f"  ✓ {dest_path.stat().st_size / 1024 / 1024:.1f} MB — {ext.upper()}{q_tag}")
+    tw_session = get_tw_session()
+    tw_track = TWTrack(track_id=track.id)
+    result = tw_track.get(
+        session=tw_session,
+        audio_format=TWAudioFormat.hi_res,
+        out_dir=dest_dir,
+        no_extra_files=True,
+    )
+    if result:
+        size = result.stat().st_size / 1024 / 1024
+        print(f"  ✓ {size:.1f} MB — {result.suffix.lstrip('.').upper()}")
+    else:
+        print("  ✗ No se pudo descargar.")
 
 def tidal_download_album(session, album, dest_base):
-    year = album.release_date.year if album.release_date else ""
-    folder = dest_base / "Tidal" / sanitize(f"{album.artist.name} - {album.name} ({year})")
+    from tidal_wave.album import Album as TWAlbum
+    from tidal_wave.media import AudioFormat as TWAudioFormat
+
+    folder = dest_base / "Tidal"
     folder.mkdir(parents=True, exist_ok=True)
-    tracks = list(album.tracks())
-    print(f"\n  Descargando album: {album.name} ({len(tracks)} tracks)")
-    for i, track in enumerate(tracks, 1):
-        tidal_download_track(session, track, folder, album, i, len(tracks))
-    print(f"\n  ✓ Album completo en: {folder}")
+
+    print(f"\n  Descargando album: {album.name}")
+    tw_session = get_tw_session()
+    tw_album = TWAlbum(album_id=album.id)
+    tw_album.get(
+        session=tw_session,
+        audio_format=TWAudioFormat.hi_res,
+        out_dir=folder,
+        no_extra_files=True,
+    )
+    print(f"\n  ✓ Album descargado en: {folder}")
 
 def menu_tidal(session, download_dir):
     while True:

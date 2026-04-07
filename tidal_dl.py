@@ -7,7 +7,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.4.7"
+__version__ = "1.4.8"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────

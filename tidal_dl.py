@@ -7,7 +7,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.4.2"
+__version__ = "1.4.3"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -710,13 +710,20 @@ def yt_search(query, limit=10):
         info = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
         return info.get("entries", [])
 
-def yt_get_formats(url):
+_VIDEO_CODEC_NAMES = {
+    "av01": "AV1", "vp09": "VP9", "vp9": "VP9",
+    "avc1": "H.264", "hvc1": "H.265", "dvh1": "H.265",
+}
+
+def yt_get_all_formats(url):
     import yt_dlp
     opts = {"quiet": True, "no_warnings": True}
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=False)
+
+    # Audio-only formats
     audio_fmts = []
-    seen = set()
+    seen_a = set()
     for f in sorted(info.get("formats", []), key=lambda x: x.get("abr") or 0, reverse=True):
         if f.get("vcodec") not in (None, "none"):
             continue
@@ -726,8 +733,8 @@ def yt_get_formats(url):
         codec = f.get("acodec", "?").split(".")[0]
         ext = f.get("ext", "?")
         key = (codec, abr, ext)
-        if key not in seen:
-            seen.add(key)
+        if key not in seen_a:
+            seen_a.add(key)
             audio_fmts.append({
                 "format_id": f["format_id"],
                 "ext": ext,
@@ -735,12 +742,49 @@ def yt_get_formats(url):
                 "abr": abr,
                 "filesize": f.get("filesize") or f.get("filesize_approx") or 0,
             })
-    return info, audio_fmts[:8]
+
+    # Video-only formats (se combinan con el mejor audio via ffmpeg)
+    video_fmts = []
+    seen_v = set()
+    for f in sorted(
+        info.get("formats", []),
+        key=lambda x: ((x.get("height") or 0), (x.get("fps") or 0), (x.get("vbr") or x.get("tbr") or 0)),
+        reverse=True,
+    ):
+        if f.get("vcodec") in (None, "none"):
+            continue
+        if f.get("acodec") not in (None, "none"):
+            continue  # omitir streams combinados (muxed)
+        height = f.get("height") or 0
+        fps = int(f.get("fps") or 0)
+        vcodec_raw = f.get("vcodec", "?").split(".")[0]
+        vcodec = _VIDEO_CODEC_NAMES.get(vcodec_raw, vcodec_raw.upper())
+        vbr = int(f.get("vbr") or f.get("tbr") or 0)
+        key = (height, fps, vcodec_raw)
+        if key not in seen_v:
+            seen_v.add(key)
+            video_fmts.append({
+                "format_id": f["format_id"],
+                "ext": f.get("ext", "?"),
+                "vcodec": vcodec,
+                "height": height,
+                "fps": fps,
+                "vbr": vbr,
+                "filesize": f.get("filesize") or f.get("filesize_approx") or 0,
+            })
+
+    return info, audio_fmts[:8], video_fmts[:8]
 
 def yt_download(url, dest_dir, format_id=None):
     import yt_dlp
     has_ffmpeg = check_ffmpeg()
-    fmt = format_id if format_id else "bestaudio/best"
+    # Prefer: 256kbps AAC (YouTube Music) → 160kbps Opus → best available
+    if format_id:
+        fmt = format_id
+    elif has_ffmpeg:
+        fmt = "bestaudio[acodec=opus]/bestaudio[acodec=aac]/bestaudio/best"
+    else:
+        fmt = "bestaudio/best"
     postprocessors = []
     if has_ffmpeg:
         postprocessors += [
@@ -757,6 +801,24 @@ def yt_download(url, dest_dir, format_id=None):
     with yt_dlp.YoutubeDL(opts) as ydl:
         ydl.download([url])
 
+def yt_download_video(url, dest_dir, video_format_id, audio_format_id=None):
+    import yt_dlp
+    has_ffmpeg = check_ffmpeg()
+    if has_ffmpeg:
+        audio = audio_format_id or "bestaudio[acodec=opus]/bestaudio[acodec=aac]/bestaudio"
+        fmt = f"{video_format_id}+{audio}"
+    else:
+        fmt = video_format_id
+    opts = {
+        "format": fmt,
+        "outtmpl": str(dest_dir / "%(title)s.%(ext)s"),
+        "merge_output_format": "mp4",
+        "quiet": False,
+        "no_warnings": True,
+    }
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        ydl.download([url])
+
 def menu_youtube(download_dir):
     ensure_installed(["yt-dlp"])
 
@@ -764,9 +826,9 @@ def menu_youtube(download_dir):
         print("\n  ── YouTube ───────────────────────────────────────")
         print("  Catálogo enorme: conciertos, lives, rarezas · Sin cuenta")
         if check_ffmpeg():
-            print("  Calidad: hasta ~160kbps Opus → convertido a FLAC")
+            print("  Audio: Opus/AAC → FLAC  |  Video: hasta 4K · necesita ffmpeg ✓")
         else:
-            print("  Calidad: mejor audio nativo (opus/m4a) · ffmpeg no encontrado")
+            print("  Audio: mejor nativo · Video: requiere ffmpeg (no encontrado)")
         print()
         print("  1. Buscar por nombre")
         print("  2. Pegar URL de YouTube")
@@ -800,27 +862,67 @@ def menu_youtube(download_dir):
             if not url:
                 continue
 
-        print("\n  Obteniendo info del video...")
+        print("\n  Obteniendo formatos disponibles...")
         try:
-            info, fmts = yt_get_formats(url)
+            info, audio_fmts, video_fmts = yt_get_all_formats(url)
         except Exception as e:
             print(f"  Error: {e}")
             continue
 
         print(f"\n  {info.get('title','?')}  —  {info.get('channel') or info.get('uploader','?')}")
         print(f"  Duración: {fmt_duration(info.get('duration'))}")
-
-        best = fmts[0] if fmts else None
-        if best:
-            size = f" (~{best['filesize']/1024/1024:.0f} MB)" if best['filesize'] else ""
-            print(f"  Calidad: {best['codec'].upper()}  {best['abr']}kbps  .{best['ext']}{size}  ★ mejor disponible")
         print()
+        print("  ¿Qué querés descargar?")
+        print("  1. Solo audio  (FLAC)")
+        print("  2. Video       (MP4  · video + mejor audio)")
+        print("  0. Cancelar")
+
+        mode = ask("\n  Elegí: ", ["0","1","2"])
+        if mode == "0":
+            continue
 
         dest = download_dir / "YouTube"
         dest.mkdir(parents=True, exist_ok=True)
-        format_id = best["format_id"] if best else None
-        yt_download(url, dest, format_id)
-        print(f"\n  ✓ Guardado en: {dest}")
+
+        if mode == "1":
+            best = audio_fmts[0] if audio_fmts else None
+            if best:
+                size = f" (~{best['filesize']/1024/1024:.0f} MB)" if best['filesize'] else ""
+                print(f"  Audio: {best['codec'].upper()}  {best['abr']}kbps  .{best['ext']}{size}  ★ mejor disponible")
+            print()
+            yt_download(url, dest, best["format_id"] if best else None)
+            print(f"\n  ✓ Guardado en: {dest}")
+
+        elif mode == "2":
+            if not video_fmts:
+                print("  No se encontraron formatos de video.")
+                continue
+            if not check_ffmpeg():
+                print("  ⚠ ffmpeg no encontrado — el video se descargará sin audio separado.")
+                print("    Instalá ffmpeg para obtener video + mejor audio combinados.")
+                print()
+
+            best_audio = audio_fmts[0] if audio_fmts else None
+            if best_audio:
+                _ac = {"opus": "Opus", "aac": "AAC", "mp4a": "AAC"}
+                audio_tag = f"  + {_ac.get(best_audio['codec'], best_audio['codec'].upper())} {best_audio['abr']}kbps"
+            else:
+                audio_tag = ""
+
+            def _video_label(v):
+                res    = f"{v['height']}p" if v['height'] else "?"
+                fps_s  = f" {v['fps']}fps" if v['fps'] and v['fps'] != 30 else "     "
+                vbr_s  = f"  {v['vbr']}kbps" if v['vbr'] else ""
+                size_s = f"  ~{v['filesize']/1024/1024:.0f}MB" if v['filesize'] else ""
+                return f"{res:<6}{fps_s}  {v['vcodec']:<7}{vbr_s}{size_s}{audio_tag}"
+
+            fmt = pick(video_fmts, _video_label, "  Calidades de video disponibles:")
+            if not fmt:
+                continue
+
+            yt_download_video(url, dest, fmt["format_id"],
+                              best_audio["format_id"] if best_audio else None)
+            print(f"\n  ✓ Guardado en: {dest}")
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
@@ -841,7 +943,7 @@ def main():
         print("  │  Plataforma            Calidad          Cuenta          │")
         print("  ├─────────────────────────────────────────────────────────┤")
         print("  │  1. Tidal              Lossless FLAC    Requerida HiFi  │")
-        print("  │  2. YouTube            ~160kbps Opus    No necesaria    │")
+        print("  │  2. YouTube            Audio FLAC/Video  No necesaria    │")
         print("  ├─────────────────────────────────────────────────────────┤")
         print("  │  c. Configuración                                       │")
         print("  │  0. Salir                                               │")

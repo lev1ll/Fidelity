@@ -7,9 +7,9 @@ import shutil
 import json
 import re
 import questionary
-from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
+from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, print_error_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
 
-__version__ = "2.0.5"
+__version__ = "2.0.6"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -820,8 +820,9 @@ def tidal_download_album(session, album, dest_base):
     
     try:
         tw_album = TWAlbum(album_id=album.id)
-        # Obtener lista de tracks
-        tracks = list(tw_album.tracks())
+        tw_album.set_metadata(tw_session)
+        tw_album.set_tracks(tw_session)
+        tracks = list(tw_album.tracks)
         total_tracks = len(tracks)
         
         def download_single_track(track_info):

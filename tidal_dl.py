@@ -9,7 +9,7 @@ import re
 import questionary
 from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
 
-__version__ = "2.0.4"
+__version__ = "2.0.5"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -90,20 +90,14 @@ def _auto_extract_tidal_token():
 
     token_file = Path.home() / "AppData" / "Local" / "tidal-wave" / "android-tidal.token"
 
-    # Buscar en múltiples ubicaciones posibles
+    # Buscar solo en directorios LevelDB específicos (nunca en la carpeta raíz de TIDAL)
     possible_dirs = [
         Path.home() / "AppData" / "Roaming" / "TIDAL" / "IndexedDB" / "https_desktop.tidal.com_0.indexeddb.leveldb",
-        Path.home() / "AppData" / "Local" / "TIDAL" / "IndexedDB" / "https_desktop.tidal.com_0.indexeddb.leveldb",
+        Path.home() / "AppData" / "Local"   / "TIDAL" / "IndexedDB" / "https_desktop.tidal.com_0.indexeddb.leveldb",
         Path.home() / "AppData" / "Roaming" / "TIDAL" / "IndexedDB" / "https_app.tidal.com_0.indexeddb.leveldb",
-        Path.home() / "AppData" / "Local" / "TIDAL" / "IndexedDB" / "https_app.tidal.com_0.indexeddb.leveldb",
-        # Local Storage — también puede tener el token
+        Path.home() / "AppData" / "Local"   / "TIDAL" / "IndexedDB" / "https_app.tidal.com_0.indexeddb.leveldb",
         Path.home() / "AppData" / "Roaming" / "TIDAL" / "Local Storage" / "leveldb",
-        Path.home() / "AppData" / "Local" / "TIDAL" / "Local Storage" / "leveldb",
-        # Fallback: carpetas padre
-        Path.home() / "AppData" / "Roaming" / "TIDAL" / "IndexedDB",
-        Path.home() / "AppData" / "Local" / "TIDAL" / "IndexedDB",
-        Path.home() / "AppData" / "Roaming" / "TIDAL",
-        Path.home() / "AppData" / "Local" / "TIDAL",
+        Path.home() / "AppData" / "Local"   / "TIDAL" / "Local Storage" / "leveldb",
     ]
 
     best_token = None
@@ -133,6 +127,14 @@ def _auto_extract_tidal_token():
 
         for f in search_paths:
             if f.is_dir():
+                continue
+            # Solo archivos LevelDB relevantes, saltear archivos grandes (>5MB)
+            if f.suffix.lower() not in (".log", ".ldb", ""):
+                continue
+            try:
+                if f.stat().st_size > 5 * 1024 * 1024:
+                    continue
+            except Exception:
                 continue
 
             # Intentar copiar a temp primero para evitar locks de Windows

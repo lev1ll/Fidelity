@@ -8,7 +8,7 @@ import json
 import re
 from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box
 
-__version__ = "1.8.0"
+__version__ = "1.8.1"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────

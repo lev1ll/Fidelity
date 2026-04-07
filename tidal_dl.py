@@ -9,7 +9,7 @@ import re
 import questionary
 from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, print_error_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
 
-__version__ = "2.0.6"
+__version__ = "2.0.7"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -356,6 +356,25 @@ def _patch_tidal_wave():
             return self.outfile
 
     TWTrack.download_url = _download_url_with_progress
+
+    # ── Fix 4: estructura de carpetas simple artista/album sin [id] [año] ────
+    def _simple_album_dir(self, out_dir):
+        import re as _re2
+        def _clean(s):
+            return _re2.sub(r'[<>:"/\\|?*]', '_', str(s).replace("..", "").replace("/", " and ")).strip()
+
+        artist = _clean(self.album.artist.name) if hasattr(self, 'album') and self.album else "Unknown"
+        album  = _clean(self.album.name)        if hasattr(self, 'album') and self.album else "Unknown"
+
+        self.album_dir = out_dir / artist / album
+        self.album_dir.mkdir(parents=True, exist_ok=True)
+        self.cover_path = self.album_dir / "cover.jpg"
+
+        if hasattr(self.album, 'number_of_volumes') and self.album.number_of_volumes > 1:
+            volume = f"Volume {self.metadata.volume_number}"
+            (self.album_dir / volume).mkdir(parents=True, exist_ok=True)
+
+    TWTrack.set_album_dir = _simple_album_dir
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -804,7 +823,8 @@ def tidal_download_album(session, album, dest_base):
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import time
 
-    folder = dest_base / "Tidal" / sanitize(album.name)
+    # tidal-wave crea artista/album internamente via set_album_dir (parcheado)
+    folder = dest_base / "Tidal"
     folder.mkdir(parents=True, exist_ok=True)
 
     print_album_progress(album.name, 0, 1)
@@ -868,8 +888,10 @@ def tidal_download_album(session, album, dest_base):
                     errors += 1
         
         duration = time.time() - start_time
+        artist_folder = sanitize(album.artist.name) if album.artist else "Unknown"
+        album_folder  = sanitize(album.name)
         show_download_summary(downloaded, total_size_mb, duration, success_count=downloaded, error_count=errors)
-        console.print(f"[cyan]📁 Guardado en:[/cyan] {folder}\n")
+        console.print(f"[cyan]📁 Guardado en:[/cyan] {folder / artist_folder / album_folder}\n")
         
     except Exception as e:
         print_error_box("Error en descarga", str(e))

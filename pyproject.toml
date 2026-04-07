@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fidelity-dl"
-version = "1.7.1"
+version = "1.8.0"
 description = "Multi-platform music downloader"
 requires-python = ">=3.10"
 dependencies = [
@@ -16,6 +16,7 @@ dependencies = [
     "cachecontrol",
     "rich",
     "pyfiglet",
+    "questionary",
 ]
 
 [project.urls]

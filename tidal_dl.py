@@ -9,7 +9,7 @@ import re
 import questionary
 from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -515,7 +515,10 @@ def pick(items, label_fn, title=""):
     return None
 
 def pick_multi(items, label_fn, title=""):
-    """Selecciona múltiples items por número. Escribe números separados por comas."""
+    """Selecciona múltiples items por número."""
+    from rich.table import Table
+    from rich.panel import Panel
+
     if not items:
         console.print("[yellow]No hay items para seleccionar.[/yellow]")
         return None
@@ -523,20 +526,46 @@ def pick_multi(items, label_fn, title=""):
     color_palette = ["hot_pink", "deep_sky_blue1", "gold1", "green1", "medium_purple", "orange1", "cyan1", "magenta"]
     icons = ["📁", "💿", "🎵", "🎸", "🎹", "🎤", "🎧", "📀"]
 
-    if title:
-        console.print(f"\n[bold cyan]{title}[/bold cyan]")
+    # Tabla con estilo
+    table = Table(
+        show_header=True,
+        header_style="bold deep_sky_blue1",
+        border_style="deep_sky_blue1",
+        show_lines=True,
+        expand=False,
+        title=f"[bold gold1]{title}[/bold gold1]" if title else None,
+        title_style="bold gold1",
+    )
+    table.add_column("#", style="bold white", justify="right", width=4)
+    table.add_column("", width=3)
+    table.add_column("Nombre", style="white", min_width=40, max_width=65)
 
     for i, item in enumerate(items):
         color = color_palette[i % len(color_palette)]
         icon = icons[i % len(icons)]
         label = label_fn(item)
-        label_short = label[:70] + "..." if len(label) > 70 else label
-        console.print(f"  [{color}]{i + 1:2d}.[/{color}] {icon} {label_short}")
+        label_short = label[:65] + "…" if len(label) > 65 else label
+        table.add_row(
+            f"[bold {color}]{i + 1}[/bold {color}]",
+            icon,
+            label_short,
+        )
 
-    console.print(f"\n[bold gold1]Escribe los números separados por comas, o 'a' para todos:[/bold gold1]")
+    console.print()
+    console.print(table)
+    console.print(
+        Panel(
+            "[bold white]Escribe los números separados por comas[/bold white]  [dim]ej: 1,3,5[/dim]\n"
+            "[bold white]'a'[/bold white] para seleccionar [bold green1]todos[/bold green1]   "
+            "[bold white]Enter[/bold white] para cancelar",
+            border_style="hot_pink",
+            padding=(0, 2),
+            expand=False,
+        )
+    )
 
     try:
-        resp = input("  > ").strip().lower()
+        resp = input("  ❯ ").strip().lower()
     except (KeyboardInterrupt, EOFError):
         console.print("\n[yellow]Cancelado.[/yellow]")
         return None
@@ -545,6 +574,7 @@ def pick_multi(items, label_fn, title=""):
         return None
 
     if resp == "a":
+        console.print(f"  [green1]✓ Todos seleccionados ({len(items)})[/green1]")
         return list(items)
 
     selected = []
@@ -558,14 +588,15 @@ def pick_multi(items, label_fn, title=""):
                 if items[idx] not in selected:
                     selected.append(items[idx])
             else:
-                console.print(f"  [yellow]Número {part} fuera de rango, ignorado.[/yellow]")
+                console.print(f"  [yellow]⚠ {part} fuera de rango, ignorado.[/yellow]")
         except ValueError:
-            console.print(f"  [yellow]'{part}' no es válido, ignorado.[/yellow]")
+            console.print(f"  [yellow]⚠ '{part}' no es válido, ignorado.[/yellow]")
 
     if not selected:
         console.print("[red]No se seleccionó ningún item.[/red]")
         return None
 
+    console.print(f"  [green1]✓ {len(selected)} seleccionado(s)[/green1]")
     return selected
 
 def fmt_duration(seconds):

@@ -4,7 +4,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -308,7 +308,17 @@ def tidal_download_track(session, track, dest_dir, album=None, num=None, total=N
     track_num = str(getattr(track, "track_num", 0)).zfill(2)
     filename = sanitize(f"{track_num}. {artist} - {track.name}")
 
-    url = track.get_url()
+    # get_stream() respeta la calidad Hi-Res del config; get_url() siempre devuelve 16-bit
+    quality_label = ""
+    try:
+        stream = track.get_stream()
+        manifest = stream.get_stream_manifest()
+        urls = manifest.get_urls()
+        url = urls[0]
+        quality_label = getattr(stream, "audio_quality", "") or ""
+    except Exception:
+        url = track.get_url()
+
     ext = "m4a" if "mp4" in url.split("?")[0] else "flac"
     dest_path = dest_dir / f"{filename}.{ext}"
 
@@ -325,7 +335,8 @@ def tidal_download_track(session, track, dest_dir, album=None, num=None, total=N
         except Exception:
             pass
     tidal_embed_tags(dest_path, track, album)
-    print(f"  ✓ {dest_path.stat().st_size / 1024 / 1024:.1f} MB — {ext.upper()}")
+    q_tag = f" [{quality_label}]" if quality_label else ""
+    print(f"  ✓ {dest_path.stat().st_size / 1024 / 1024:.1f} MB — {ext.upper()}{q_tag}")
 
 def tidal_download_album(session, album, dest_base):
     year = album.release_date.year if album.release_date else ""

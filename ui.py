@@ -205,7 +205,7 @@ def menu_interactive(title, options, subtitle=""):
     answer = questionary.select(
         "Selecciona con ↑↓ y presiona ENTER:",
         choices=options,
-        pointer="→ [bold hot_pink]►[/bold hot_pink]",
+        pointer="→ ►",
         style=questionary.Style([
             ('pointer', 'fg:#ff69b4 bold'),
             ('highlighted', 'fg:#00d4ff bold'),

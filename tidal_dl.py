@@ -7,7 +7,7 @@ import shutil
 import json
 import re
 
-__version__ = "1.3.4"
+__version__ = "1.4.0"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -63,15 +63,61 @@ def _setup_tw_logging():
     root.addHandler(handler)
     root.propagate = False
 
-def _patch_tidal_wave():
-    """Parchea build_urls de XMLDASHManifest para que no cuelgue.
+def _auto_extract_tidal_token():
+    """Extrae el token del Tidal desktop automaticamente desde IndexedDB.
 
-    El loop original solo corta con HTTP 500. Si el CDN devuelve 403/404
-    para segmentos inexistentes, el loop corre para siempre.
+    Funciona en Windows con la app de Tidal instalada.
+    Guarda el token en el formato que espera tidal-wave.
     """
+    import re, glob, base64, json, time
+    from pathlib import Path
+
+    token_file = Path.home() / ".config" / "tidal-wave" / "windows-tidal.token"
+    idb_dir = Path.home() / "AppData" / "Roaming" / "TIDAL" / "IndexedDB" / \
+              "https_desktop.tidal.com_0.indexeddb.leveldb"
+
+    if not idb_dir.exists():
+        return False
+
+    best_token = None
+    best_exp = 0
+
+    for f in idb_dir.glob("*.log"):
+        try:
+            data = f.read_bytes().decode("utf-8", errors="ignore")
+            for t in re.findall(
+                r'accessToken":"(eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)',
+                data
+            ):
+                try:
+                    payload = t.split(".")[1]
+                    payload += "=" * (4 - len(payload) % 4)
+                    decoded = json.loads(base64.b64decode(payload))
+                    exp = decoded.get("exp", 0)
+                    if exp > time.time() and exp > best_exp:
+                        best_token = t
+                        best_exp = exp
+                except Exception:
+                    continue
+        except Exception:
+            continue
+
+    if not best_token:
+        return False
+
+    token_file.parent.mkdir(parents=True, exist_ok=True)
+    token_data = json.dumps({"access_token": best_token})
+    token_file.write_bytes(base64.b64encode(token_data.encode("utf-8")))
+    return True
+
+
+def _patch_tidal_wave():
+    """Parchea build_urls y download_url de tidal-wave."""
     import re as _re
     from tidal_wave.dash import XMLDASHManifest
+    from tidal_wave.track import Track as TWTrack
 
+    # ── Fix 1: loop infinito en build_urls ───────────────────────────────────
     def _fixed_build_urls(self, session):
         if len(self.segment_timeline.s) == 0:
             return None
@@ -112,6 +158,71 @@ def _patch_tidal_wave():
         return urls_list
 
     XMLDASHManifest.build_urls = _fixed_build_urls
+
+    # ── Fix 2: barra de progreso en download_url ──────────────────────────────
+    _orig_download_url = TWTrack.download_url
+
+    def _download_url_with_progress(self, session, out_dir):
+        from tidal_wave.requesting import fetch_content_length, http_request_range_headers
+        from tidal_wave.temporary import temporary_file
+        import shutil, ffmpeg
+
+        range_size = 1024 * 1024
+        content_length = fetch_content_length(session=session, url=self.urls[0])
+        if content_length == 0:
+            return None
+
+        range_headers = list(http_request_range_headers(
+            content_length=content_length,
+            range_size=range_size,
+            return_tuple=False,
+        ))
+        total_chunks = len(range_headers)
+
+        with temporary_file(suffix=".mp4") as ntf:
+            for i, rh in enumerate(range_headers, 1):
+                pct = i / total_chunks * 100
+                bar = "█" * int(pct / 5) + "░" * (20 - int(pct / 5))
+                print(f"\r  [{bar}] {pct:5.1f}%  ({i}/{total_chunks})", end="", flush=True)
+                with session.get(
+                    self.urls[0],
+                    params=self.download_params,
+                    headers={"Range": rh},
+                ) as rr:
+                    if not rr.ok:
+                        print()
+                        return None
+                    ntf.write(rr.content)
+            print(f"\r  [{'█'*20}] 100.0%  — procesando...", flush=True)
+            ntf.seek(0)
+
+            from pathlib import Path as _Path
+            from Crypto.Cipher import AES
+            from Crypto.Util import Counter
+
+            if (self.manifest.key is not None) and (self.manifest.nonce is not None):
+                counter = Counter.new(64, prefix=self.manifest.nonce, initial_value=0)
+                decryptor = AES.new(self.manifest.key, AES.MODE_CTR, counter=counter)
+                with temporary_file(suffix=".mp4") as f_dec:
+                    f_dec.write(decryptor.decrypt(_Path(ntf.name).read_bytes()))
+                    if self.codec == "flac":
+                        ffmpeg.input(f_dec.name, hide_banner=None, y=None).output(
+                            self.absolute_outfile, acodec="copy", loglevel="quiet"
+                        ).run()
+                    elif self.codec == "m4a":
+                        shutil.copyfile(f_dec.name, self.outfile)
+            else:
+                if self.codec == "flac":
+                    ffmpeg.input(ntf.name, hide_banner=None, y=None).output(
+                        self.absolute_outfile, acodec="copy", loglevel="quiet"
+                    ).run()
+                elif self.codec == "m4a":
+                    shutil.copyfile(ntf.name, self.outfile)
+
+            print(f"\r  [{'█'*20}] 100.0%  ✓                    ")
+            return self.outfile
+
+    TWTrack.download_url = _download_url_with_progress
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -330,11 +441,21 @@ def get_tw_session():
     from tidal_wave.media import AudioFormat as TWAudioFormat
     from cachecontrol import CacheControl
     _patch_tidal_wave()
-    print()
-    print("  ── Autenticación Hi-Res (tidal-wave) ────────────────")
-    print("  Esta sesión permite descargar en 24-bit.")
-    print("  Seguí las instrucciones en pantalla.")
-    print()
+
+    # Intentar extraer token del Tidal desktop automáticamente
+    token_file = Path.home() / ".config" / "tidal-wave" / "windows-tidal.token"
+    if not token_file.exists():
+        print()
+        print("  Buscando token Hi-Res del Tidal desktop...", end="", flush=True)
+        if _auto_extract_tidal_token():
+            print(" ✓ encontrado!")
+        else:
+            print(" no encontrado.")
+            print()
+            print("  ── Autenticación Hi-Res (tidal-wave) ────────────────")
+            print("  Seguí las instrucciones en pantalla.")
+            print()
+
     session, _ = tw_login(audio_format=TWAudioFormat.hi_res)
     _tw_session = CacheControl(session)
     print("  ✓ Sesion Hi-Res lista!")

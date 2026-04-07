@@ -69,7 +69,7 @@ def _auto_extract_tidal_token():
     Funciona en Windows con la app de Tidal instalada.
     Guarda el token en el formato que espera tidal-wave.
     """
-    import re, glob, base64, json, time
+    import re, base64, json, time
     from pathlib import Path
 
     token_file = Path.home() / ".config" / "tidal-wave" / "windows-tidal.token"
@@ -82,29 +82,34 @@ def _auto_extract_tidal_token():
     best_token = None
     best_exp = 0
 
-    for f in idb_dir.glob("*.log"):
-        try:
-            data = f.read_bytes().decode("utf-8", errors="ignore")
-            for t in re.findall(
-                r'accessToken":"(eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)',
-                data
-            ):
-                try:
-                    payload = t.split(".")[1]
-                    payload += "=" * (4 - len(payload) % 4)
-                    decoded = json.loads(base64.b64decode(payload))
-                    exp = decoded.get("exp", 0)
-                    if exp > time.time() and exp > best_exp:
-                        best_token = t
-                        best_exp = exp
-                except Exception:
-                    continue
-        except Exception:
-            continue
+    # Buscar en .log y .ldb
+    for pattern in ("*.log", "*.ldb"):
+        for f in idb_dir.glob(pattern):
+            try:
+                data = f.read_bytes().decode("utf-8", errors="ignore")
+                for t in re.findall(
+                    r'accessToken":"(eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)',
+                    data
+                ):
+                    try:
+                        payload = t.split(".")[1]
+                        payload += "=" * (4 - len(payload) % 4)
+                        decoded = json.loads(base64.b64decode(payload))
+                        exp = decoded.get("exp", 0)
+                        cid = decoded.get("cid", "?")
+                        if exp > time.time() and exp > best_exp:
+                            best_token = t
+                            best_exp = exp
+                            best_cid = cid
+                    except Exception:
+                        continue
+            except Exception:
+                continue
 
     if not best_token:
         return False
 
+    print(f" [cid={best_cid}]", end="", flush=True)
     token_file.parent.mkdir(parents=True, exist_ok=True)
     token_data = json.dumps({"access_token": best_token})
     token_file.write_bytes(base64.b64encode(token_data.encode("utf-8")))
@@ -161,7 +166,7 @@ def _patch_tidal_wave():
 
     # ── Fix 2: barra de progreso en download_urls (DASH segments) ────────────
     def _download_urls_with_progress(self, session):
-        from tidal_wave.temporary import temporary_file
+        from tidal_wave.utils import temporary_file
         import shutil, ffmpeg
         from pathlib import Path as _Path
         from Crypto.Cipher import AES
@@ -208,7 +213,7 @@ def _patch_tidal_wave():
 
     def _download_url_with_progress(self, session, out_dir):
         from tidal_wave.requesting import fetch_content_length, http_request_range_headers
-        from tidal_wave.temporary import temporary_file
+        from tidal_wave.utils import temporary_file
         import shutil, ffmpeg
 
         range_size = 1024 * 1024
@@ -486,15 +491,15 @@ def get_tw_session():
     from cachecontrol import CacheControl
     _patch_tidal_wave()
 
-    # Intentar extraer token del Tidal desktop automáticamente
+    # Siempre re-extraer token del Tidal desktop para asegurarse que no expiró
     token_file = Path.home() / ".config" / "tidal-wave" / "windows-tidal.token"
-    if not token_file.exists():
-        print()
-        print("  Buscando token Hi-Res del Tidal desktop...", end="", flush=True)
-        if _auto_extract_tidal_token():
-            print(" ✓ encontrado!")
-        else:
-            print(" no encontrado.")
+    print()
+    print("  Buscando token Hi-Res del Tidal desktop...", end="", flush=True)
+    if _auto_extract_tidal_token():
+        print(" ✓ encontrado!")
+    else:
+        print(" no encontrado.")
+        if not token_file.exists():
             print()
             print("  ── Autenticación Hi-Res (tidal-wave) ────────────────")
             print("  Seguí las instrucciones en pantalla.")

@@ -6,9 +6,9 @@ import subprocess
 import shutil
 import json
 import re
-from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box
+from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
 
-__version__ = "1.8.1"
+__version__ = "1.9.0"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -362,43 +362,103 @@ def check_ffmpeg():
     return shutil.which("ffmpeg") is not None
 
 def ask(prompt, options=None):
-    while True:
-        val = input(prompt).strip()
-        if options is None or val.lower() in [str(o).lower() for o in options]:
-            return val
-        print(f"  Opcion invalida. Elegí entre: {', '.join(str(o) for o in options)}")
+    """Usa questionary para seleccionar de opciones (sin números)."""
+    if options is None:
+        return input(prompt).strip()
+    
+    # Crear opciones con emojis y estilos
+    answer = questionary.select(
+        prompt,
+        choices=options,
+        pointer="→ ►",
+        style=questionary.Style([
+            ('pointer', 'fg:#ff69b4 bold'),
+            ('highlighted', 'fg:#00d4ff bold'),
+            ('selected', 'fg:#00ff00 bold'),
+        ])
+    ).ask()
+    
+    return answer if answer else options[0]
 
 def pick(items, label_fn, title=""):
+    """Selecciona un item de una lista usando menú con flechas."""
+    if not items:
+        console.print("[yellow]No hay items para seleccionar.[/yellow]")
+        return None
+    
     if title:
-        print(f"\n{title}")
-    for i, item in enumerate(items, 1):
-        print(f"  {i}. {label_fn(item)}")
-    print("  0. Volver")
-    while True:
-        sel = input("\n  Elegí un número (o 0 para volver): ").strip()
-        if sel == "0":
-            return None
-        if sel.isdigit() and 1 <= int(sel) <= len(items):
-            return items[int(sel) - 1]
-        print("  Número inválido.")
+        console.print(f"\n[bold cyan]{title}[/bold cyan]")
+    
+    # Crear opciones con labels y mostrar preview coloreado
+    options = [label_fn(item) for item in items]
+    
+    # Mostrar opciones con colores
+    color_palette = ["hot_pink", "deep_sky_blue1", "gold1", "green1", "medium_purple", "orange1", "cyan1", "magenta"]
+    for idx, opt in enumerate(options):
+        color = color_palette[idx % len(color_palette)]
+        icon = ["🎵", "🎸", "🎹", "🎤", "🎧", "📀", "🎼", "🌟"][idx % 8]
+        console.print(f"  [{color}]{icon}[/{color}] {opt}")
+    
+    options.append("🚪 Volver")
+    
+    answer = questionary.select(
+        "\nSelecciona un item:",
+        choices=options,
+        pointer="→ ►",
+        style=questionary.Style([
+            ('pointer', 'fg:#ff69b4 bold'),
+            ('highlighted', 'fg:#00d4ff bold'),
+            ('selected', 'fg:#00ff00 bold'),
+        ])
+    ).ask()
+    
+    if answer is None or answer == "🚪 Volver":
+        return None
+    
+    # Remover el icono para encontrar el índice correcto
+    for idx, opt in enumerate(options[:-1]):  # Excluir "Volver"
+        if opt in answer:
+            return items[idx]
+    
+    return None
 
 def pick_multi(items, label_fn, title=""):
+    """Selecciona múltiples items usando menú con flechas y checkboxes."""
+    if not items:
+        console.print("[yellow]No hay items para seleccionar.[/yellow]")
+        return None
+    
     if title:
-        print(f"\n{title}")
-    for i, item in enumerate(items, 1):
-        print(f"  {i}. {label_fn(item)}")
-    print("  0. Volver")
-    print("  * Para descargar todo escribí 'todo'")
-    while True:
-        sel = input("\n  Elegí números separados por coma (ej: 1,3,5) o 'todo': ").strip()
-        if sel == "0":
-            return None
-        if sel.lower() == "todo":
-            return items
-        parts = [p.strip() for p in sel.split(",")]
-        if all(p.isdigit() and 1 <= int(p) <= len(items) for p in parts):
-            return [items[int(p) - 1] for p in parts]
-        print("  Selección inválida.")
+        console.print(f"\n[bold cyan]{title}[/bold cyan]")
+    
+    # Crear opciones con labels
+    options = [label_fn(item) for item in items]
+    
+    # Mostrar opciones con colores
+    color_palette = ["hot_pink", "deep_sky_blue1", "gold1", "green1", "medium_purple", "orange1", "cyan1", "magenta"]
+    for idx, opt in enumerate(options):
+        color = color_palette[idx % len(color_palette)]
+        icon = ["📁", "💿", "🎵", "🎸", "🎹", "🎤", "🎧", "📀"][idx % 8]
+        console.print(f"  [{color}]{icon}[/{color}] {opt}")
+    
+    answers = questionary.checkbox(
+        "\nSelecciona items (ESPACIO=marcar, ENTER=continuar):",
+        choices=options,
+        style=questionary.Style([
+            ('checked', 'fg:#00ff00 bold'),
+            ('pointer', 'fg:#ff69b4 bold'),
+            ('highlighted', 'fg:#00d4ff bold'),
+        ])
+    ).ask()
+    
+    if answers is None:
+        return None
+    
+    if not answers:
+        return None
+    
+    selected = [items[options.index(ans)] for ans in answers if ans in options]
+    return selected if selected else None
 
 def fmt_duration(seconds):
     if not seconds:
@@ -434,19 +494,26 @@ def print_setup_instructions(download_dir):
 
 def menu_settings(cfg):
     while True:
-        print("\n  ── Configuración ─────────────────────────────────")
-        print(f"  Carpeta de descarga: {cfg['download_dir']}")
-        print()
-        print("  1. Cambiar carpeta de descarga")
-        print("  0. Volver")
-
-        choice = ask("\n  Elegí: ", ["0", "1"])
-        if choice == "0":
+        console.print(f"\n[bold deep_sky_blue1]── Configuración ──────────────────────[/bold deep_sky_blue1]")
+        console.print(f"[gold1]📁 Carpeta de descarga:[/gold1] [cyan]{cfg['download_dir']}[/cyan]\n")
+        
+        settings_options = [
+            "📁 Cambiar carpeta de descarga",
+            "⬅️  Volver"
+        ]
+        
+        choice = menu_interactive(
+            "CONFIGURACIÓN",
+            settings_options,
+            "Selecciona una opción"
+        )
+        
+        if choice == 1:  # Volver
             break
 
-        elif choice == "1":
-            print(f"\n  Carpeta actual: {cfg['download_dir']}")
-            nueva = input("  Nueva carpeta (Enter para cancelar): ").strip()
+        elif choice == 0:  # Cambiar carpeta
+            console.print(f"\n[cyan]Carpeta actual:[/cyan] {cfg['download_dir']}")
+            nueva = input("  📁 Nueva carpeta (Enter para cancelar): ").strip()
             if not nueva:
                 continue
             p = Path(nueva)
@@ -454,9 +521,9 @@ def menu_settings(cfg):
                 p.mkdir(parents=True, exist_ok=True)
                 cfg["download_dir"] = str(p)
                 save_config(cfg)
-                print(f"  ✓ Guardado: {p}")
+                print_success_box("Guardado", f"Carpeta actualizada a: {p}")
             except Exception as e:
-                print(f"  Error: {e}")
+                print_error_box("Error", str(e))
 
 # ─── TIDAL ───────────────────────────────────────────────────────────────────
 
@@ -568,15 +635,21 @@ def tidal_download_album(session, album, dest_base):
     from tidal_wave.album import Album as TWAlbum
     from tidal_wave.media import AudioFormat as TWAudioFormat
     from concurrent.futures import ThreadPoolExecutor, as_completed
+    import time
 
     folder = dest_base / "Tidal" / sanitize(album.name)
     folder.mkdir(parents=True, exist_ok=True)
 
-    print(f"\n  Descargando album: {album.name}")
-    print("  (descargando hasta 3 tracks simultáneamente)\n")
+    print_album_progress(album.name, 0, 1)
+    console.print("[cyan]  (descargando hasta 3 tracks simultáneamente)[/cyan]\n")
     
     tw_session = get_tw_session()
     _setup_tw_logging()
+    
+    start_time = time.time()
+    downloaded = 0
+    errors = 0
+    total_size_mb = 0
     
     try:
         tw_album = TWAlbum(album_id=album.id)
@@ -586,10 +659,11 @@ def tidal_download_album(session, album, dest_base):
         
         def download_single_track(track_info):
             """Descarga un track individual"""
+            nonlocal total_size_mb
             track, num = track_info
             try:
                 artist = ", ".join(a.name for a in track.artists) if track.artists else "Unknown"
-                print(f"  [{num}/{total_tracks}] {artist} - {track.name}...", flush=True)
+                print_track_downloading(num, total_tracks, artist, track.name)
                 
                 from tidal_wave.track import Track as TWTrack
                 tw_track = TWTrack(track_id=track.id)
@@ -601,30 +675,36 @@ def tidal_download_album(session, album, dest_base):
                 )
                 
                 if result:
-                    size = result.stat().st_size / 1024 / 1024
-                    print(f"  ✓ [{num}/{total_tracks}] {size:.1f} MB")
-                    return True
+                    size_mb = result.stat().st_size / 1024 / 1024
+                    total_size_mb += size_mb
+                    console.print(f"  [green1]✓[/green1] [{num}/{total_tracks}] {size_mb:.1f} MB")
+                    return (True, size_mb)
                 else:
-                    print(f"  ✗ [{num}/{total_tracks}] No se descargó")
-                    return False
+                    console.print(f"  [red]✗[/red] [{num}/{total_tracks}] No se descargó")
+                    return (False, 0)
             except Exception as e:
-                print(f"  ✗ [{num}/{total_tracks}] Error: {str(e)[:50]}")
-                return False
+                console.print(f"  [red]✗[/red] [{num}/{total_tracks}] Error: {str(e)[:50]}")
+                return (False, 0)
         
         # Descargar en paralelo (máximo 3 simultáneos)
-        downloaded = 0
         with ThreadPoolExecutor(max_workers=3) as executor:
             futures = {
                 executor.submit(download_single_track, (t, i)): i 
                 for i, t in enumerate(tracks, 1)
             }
             for future in as_completed(futures):
-                if future.result():
+                success, size = future.result()
+                if success:
                     downloaded += 1
+                else:
+                    errors += 1
         
-        print(f"\n  ✓ Album descargado: {downloaded}/{total_tracks} tracks en {folder}")
+        duration = time.time() - start_time
+        show_download_summary(downloaded, total_size_mb, duration, success_count=downloaded, error_count=errors)
+        console.print(f"[cyan]📁 Guardado en:[/cyan] {folder}\n")
+        
     except Exception as e:
-        print(f"\n  ✗ Error: {e}")
+        print_error_box("Error en descarga", str(e))
 
 _TIDAL_VIDEO_QUALITIES = [
     ("Alta",  "1080p", "high"),
@@ -674,33 +754,39 @@ def tidal_download_video(session, video, dest_dir):
 
 def menu_tidal(session, download_dir):
     while True:
-        print("\n  ── Tidal ─────────────────────────────────────────")
-        print("  Calidad: FLAC Lossless 16-bit / Hi-Res 24-bit")
-        print("  · Requiere: Tidal app abierta + HiFi/HiFi Plus")
-        print("  · Token: se extrae automático (sin navegador)")
-        print()
-        print("  1. Buscar artista")
-        print("  2. Buscar album")
-        print("  3. Buscar track")
-        print("  4. Buscar video")
-        print("  5. Pegar URL de Tidal")
-        print("  6. Cerrar sesion (logout)")
-        print("  0. Volver")
+        console.print("\n[bold deep_sky_blue1]── Tidal ──────────────────────────────[/bold deep_sky_blue1]")
+        console.print("[gold1]Calidad: FLAC Lossless 16-bit / Hi-Res 24-bit[/gold1]")
+        console.print("[cyan1]  • Requiere: Tidal app abierta + HiFi/HiFi Plus[/cyan1]")
+        console.print("[medium_purple]  • Token: se extrae automático (sin navegador)[/medium_purple]\n")
+        
+        menu_options = [
+            "🔍 Buscar artista",
+            "💿 Buscar album",
+            "🎵 Buscar track",
+            "📹 Buscar video",
+            "🔗 Pegar URL de Tidal",
+            "🚪 Cerrar sesión (logout)",
+            "⬅️  Volver"
+        ]
+        
+        choice = menu_interactive(
+            "MENÚ TIDAL",
+            menu_options,
+            "Selecciona una opción"
+        )
 
-        choice = ask("\n  Elegí: ", ["0","1","2","3","4","5","6"])
-
-        if choice == "0":
+        if choice == 6:  # Volver
             break
 
-        elif choice == "6":
+        elif choice == 5:  # Logout
             if SESSION_FILE.exists():
                 SESSION_FILE.unlink()
-                print("\n  ✓ Sesion cerrada.")
+                print_info_box("Sesión cerrada", "Token eliminado. Inicia sesion de nuevo en la proxima vez.")
             else:
-                print("\n  No hay sesion activa.")
+                print("  No hay sesion activa.")
 
-        elif choice == "1":
-            query = input("\n  Nombre del artista: ").strip()
+        elif choice == 0:  # Buscar artista
+            query = input("\n  🔍 Nombre del artista: ").strip()
             if not query:
                 continue
             results = session.search(query, models=[tidalapi.artist.Artist], limit=10)
@@ -708,77 +794,93 @@ def menu_tidal(session, download_dir):
             if not artists:
                 print("\n  No se encontraron artistas.")
                 continue
-            artist = pick(artists, lambda a: a.name, "  Artistas encontrados:")
+            artist = pick(artists, lambda a: a.name, "🎤 Artistas encontrados:")
             if not artist:
                 continue
-            print(f"\n  ¿Qué querés de {artist.name}?")
-            print("  1. Albums")
-            print("  2. Singles y EPs")
-            print("  3. Todo")
-            sub = ask("  Elegí: ", ["1","2","3"])
+            
+            # Menú para elegir qué tipo de releases quere
+            release_type_options = [
+                "💿 Albums",
+                "🎸 Singles y EPs",
+                "🎵 Todo (Albums + Singles + EPs)"
+            ]
+            release_choice = menu_interactive(
+                f"¿Qué querés de {artist.name}?",
+                release_type_options,
+                "Selecciona el tipo de release"
+            )
+            
             all_items = []
-            if sub in ("1","3"):
+            if release_choice in (0, 2):  # Albums o Todo
                 all_items += list(artist.get_albums())
-            if sub in ("2","3"):
+            if release_choice in (1, 2):  # Singles/EPs o Todo
                 all_items += list(artist.get_ep_singles())
+            
             if not all_items:
-                print("\n  No se encontraron releases.")
+                print_info_box("Sin resultados", "No se encontraron releases para este artista.")
                 continue
+            
             def _release_label(a):
                 q = getattr(a, "audio_quality", None) or ""
                 q_tag = ""
                 if "HI_RES" in q.upper():
-                    q_tag = " [24-bit Hi-Res]"
+                    q_tag = " 🔴 [24-bit Hi-Res]"
                 elif "LOSSLESS" in q.upper():
-                    q_tag = " [16-bit FLAC]"
+                    q_tag = " 🟢 [16-bit FLAC]"
                 return f"{a.name} ({a.release_date.year if a.release_date else '?'}) — {a.num_tracks} tracks{q_tag}"
             selected = pick_multi(
                 all_items,
                 _release_label,
-                "  Releases disponibles:"
+                "🎵 Releases disponibles (selecciona los que quieras descargar):"
             )
             if selected:
                 for album in selected:
                     tidal_download_album(session, album, download_dir)
 
-        elif choice == "2":
-            query = input("\n  Nombre del album: ").strip()
+        elif choice == 1:  # Buscar album
+            query = input("\n  💿 Nombre del album: ").strip()
             if not query:
                 continue
             results = session.search(query, models=[tidalapi.album.Album], limit=10)
             albums = results.get("albums", [])
             if not albums:
-                print("\n  No se encontraron albums.")
+                print_info_box("Sin resultados", "No se encontraron albums.")
                 continue
             def _album_quality_label(a):
                 q = getattr(a, "audio_quality", None) or ""
                 q_tag = ""
                 if "HI_RES" in q.upper():
-                    q_tag = " [24-bit Hi-Res]"
+                    q_tag = " 🔴 [24-bit Hi-Res]"
                 elif "LOSSLESS" in q.upper():
-                    q_tag = " [16-bit FLAC]"
+                    q_tag = " 🟢 [16-bit FLAC]"
                 return f"{a.name} — {a.artist.name} ({a.release_date.year if a.release_date else '?'}){q_tag}"
             albums_sorted = sorted(
                 albums,
                 key=lambda a: 0 if "HI_RES" in (getattr(a, "audio_quality", "") or "").upper() else 1
             )
-            album = pick(albums_sorted, _album_quality_label, "  Albums encontrados (ordenados por calidad):")
-            if album:
-                tidal_download_album(session, album, download_dir)
+            selected = pick_multi(
+                albums_sorted,
+                _album_quality_label,
+                "💿 Albums encontrados (ordenados por calidad):"
+            )
+            if selected:
+                for album in selected:
+                    tidal_download_album(session, album, download_dir)
 
-        elif choice == "3":
-            query = input("\n  Nombre del track: ").strip()
+        elif choice == 2:  # Buscar track
+            query = input("\n  🎵 Nombre del track: ").strip()
             if not query:
                 continue
             results = session.search(query, models=[tidalapi.media.Track], limit=15)
             tracks = results.get("tracks", [])
             if not tracks:
-                print("\n  No se encontraron tracks.")
+                print_info_box("Sin resultados", "No se encontraron tracks.")
                 continue
             selected = pick_multi(
                 tracks,
                 lambda t: f"{t.name} — {', '.join(a.name for a in t.artists)} ({t.album.name if t.album else ''})",
-                "  Tracks encontrados:")
+                "🎵 Tracks encontrados (selecciona los que quieras descargar):"
+            )
             if selected:
                 folder = download_dir / "Tidal" / "Singles"
                 folder.mkdir(parents=True, exist_ok=True)
@@ -786,26 +888,27 @@ def menu_tidal(session, download_dir):
                     album = session.album(track.album.id) if track.album else None
                     tidal_download_track(session, track, folder, album, i, len(selected))
 
-        elif choice == "4":
-            query = input("\n  Nombre del video: ").strip()
+        elif choice == 3:  # Buscar video
+            query = input("\n  📹 Nombre del video: ").strip()
             if not query:
                 continue
             results = session.search(query, models=[tidalapi.media.Video], limit=10)
             videos = results.get("videos", [])
             if not videos:
-                print("\n  No se encontraron videos.")
+                print_info_box("Sin resultados", "No se encontraron videos.")
                 continue
-            video = pick(
+            selected = pick_multi(
                 videos,
                 lambda v: f"{v.name}  [{fmt_duration(v.duration)}]  — {v.artist.name if v.artist else '?'}",
-                "  Videos encontrados:"
+                "📹 Videos encontrados (selecciona los que quieras descargar):"
             )
-            if video:
-                folder = download_dir / "Tidal" / "Videos"
-                tidal_download_video(session, video, folder)
+            if selected:
+                for video in selected:
+                    folder = download_dir / "Tidal" / "Videos"
+                    tidal_download_video(session, video, folder)
 
-        elif choice == "5":
-            url = input("\n  Pegá el link de Tidal: ").strip()
+        elif choice == 4:  # Pegar URL
+            url = input("\n  🔗 Pegá el link de Tidal: ").strip()
             if "track/" in url:
                 m = re.search(r"track/(\d+)", url)
                 if m:
@@ -961,105 +1064,123 @@ def menu_youtube(download_dir):
     ensure_installed(["yt-dlp"])
 
     while True:
-        print("\n  ── YouTube ───────────────────────────────────────")
-        print("  Catálogo enorme: conciertos, lives, rarezas · Sin cuenta")
+        console.print("\n[bold deep_sky_blue1]── YouTube ────────────────────────────[/bold deep_sky_blue1]")
+        console.print("[gold1]Catálogo enorme: conciertos, lives, rarezas · Sin cuenta[/gold1]")
         if check_ffmpeg():
-            print("  Audio: Opus/AAC  |  Video: hasta 4K · necesita ffmpeg ✓")
+            console.print("[green1]Audio: Opus/AAC  |  Video: hasta 4K · ffmpeg ✓[/green1]")
         else:
-            print("  Audio: mejor nativo · Video: requiere ffmpeg (no encontrado)")
-        print()
-        print("  1. Buscar por nombre")
-        print("  2. Pegar URL de YouTube")
-        print("  0. Volver")
-
-        choice = ask("\n  Elegí: ", ["0","1","2"])
-        if choice == "0":
+            console.print("[orange1]Audio: mejor nativo · Video: requiere ffmpeg (no encontrado)[/orange1]")
+        
+        menu_options = [
+            "🔍 Buscar por nombre",
+            "🔗 Pegar URL de YouTube",
+            "⬅️  Volver"
+        ]
+        
+        choice = menu_interactive(
+            "MENÚ YOUTUBE",
+            menu_options,
+            "Selecciona una opción"
+        )
+        
+        if choice == 2:  # Volver
             break
 
         url = None
-        if choice == "1":
-            query = input("\n  Qué buscás (canción, concierto, artista...): ").strip()
+        if choice == 0:  # Buscar
+            query = input("\n  🔍 Qué buscás (canción, concierto, artista...): ").strip()
             if not query:
                 continue
-            print("\n  Buscando...")
+            console.print("\n  [bold cyan]⟳ Buscando...[/bold cyan]")
             results = yt_search(query)
             if not results:
-                print("  No se encontró nada.")
+                print_info_box("Sin resultados", "No se encontró nada en YouTube.")
                 continue
-            entry = pick(
+            selected = pick_multi(
                 results,
                 lambda e: f"{e.get('title','?')}  [{fmt_duration(e.get('duration'))}]  — {e.get('channel') or e.get('uploader','?')}",
-                "  Resultados:"
+                "📺 Resultados (selecciona los que quieras descargar):"
             )
-            if not entry:
+            if not selected:
                 continue
-            url = f"https://www.youtube.com/watch?v={entry['id']}"
+            for entry in selected:
+                url = f"https://www.youtube.com/watch?v={entry['id']}"
 
-        elif choice == "2":
-            url = input("\n  Pegá el link de YouTube: ").strip()
+        elif choice == 1:  # Pegar URL
+            url = input("\n  🔗 Pegá el link de YouTube: ").strip()
             if not url:
                 continue
+            
+            # Si no hay URL de búsqueda anterior
+            for entry in [{"url": url}]:  # Simulamos una selección
+                console.print("\n  [bold cyan]⟳ Obteniendo formatos disponibles...[/bold cyan]")
+                try:
+                    info, audio_fmts, video_fmts = yt_get_all_formats(url)
+                except Exception as e:
+                    print_error_box("Error", str(e))
+                    continue
 
-        print("\n  Obteniendo formatos disponibles...")
-        try:
-            info, audio_fmts, video_fmts = yt_get_all_formats(url)
-        except Exception as e:
-            print(f"  Error: {e}")
-            continue
+                console.print(f"\n  [bold gold1]{info.get('title','?')}[/bold gold1]  — [cyan]{info.get('channel') or info.get('uploader','?')}[/cyan]")
+                console.print(f"  [medium_purple]Duración:[/medium_purple] {fmt_duration(info.get('duration'))}\n")
+                
+                download_options = [
+                    "🔊 Audio (Opus/AAC - mejor calidad)",
+                    "📹 Video (MP4 - video + mejor audio)",
+                    "❌ Cancelar"
+                ]
+                
+                mode = menu_interactive(
+                    "¿Qué querés descargar?",
+                    download_options,
+                    "Selecciona el formato"
+                )
+                
+                if mode == 2:  # Cancelar
+                    continue
 
-        print(f"\n  {info.get('title','?')}  —  {info.get('channel') or info.get('uploader','?')}")
-        print(f"  Duración: {fmt_duration(info.get('duration'))}")
-        print()
-        print("  ¿Qué querés descargar?")
-        print("  1. Solo audio  (Opus/AAC)")
-        print("  2. Video       (MP4  · video + mejor audio)")
-        print("  0. Cancelar")
+                dest = download_dir / "YouTube"
+                dest.mkdir(parents=True, exist_ok=True)
 
-        mode = ask("\n  Elegí: ", ["0","1","2"])
-        if mode == "0":
-            continue
+                if mode == 0:  # Audio
+                    best = audio_fmts[0] if audio_fmts else None
+                    if best:
+                        size = f" (~{best['filesize']/1024/1024:.0f} MB)" if best['filesize'] else ""
+                        console.print(f"  [green1]🔊 Audio: {best['codec'].upper()}  {best['abr']}kbps  .{best['ext']}{size}  ★ mejor disponible[/green1]\n")
+                    yt_download(url, dest, best["format_id"] if best else None)
+                    print_success_box("Descarga completada", f"Guardado en: {dest}")
 
-        dest = download_dir / "YouTube"
-        dest.mkdir(parents=True, exist_ok=True)
+                elif mode == 1:  # Video
+                    if not video_fmts:
+                        print_info_box("Sin formatos", "No se encontraron formatos de video.")
+                        continue
+                    if not check_ffmpeg():
+                        print_info_box("⚠ ffmpeg no encontrado", "El video se descargará sin audio separado.\nInstalá ffmpeg para obtener video + mejor audio combinados.")
 
-        if mode == "1":
-            best = audio_fmts[0] if audio_fmts else None
-            if best:
-                size = f" (~{best['filesize']/1024/1024:.0f} MB)" if best['filesize'] else ""
-                print(f"  Audio: {best['codec'].upper()}  {best['abr']}kbps  .{best['ext']}{size}  ★ mejor disponible")
-            print()
-            yt_download(url, dest, best["format_id"] if best else None)
-            print(f"\n  ✓ Guardado en: {dest}")
+                    best_audio = audio_fmts[0] if audio_fmts else None
+                    if best_audio:
+                        _ac = {"opus": "Opus", "aac": "AAC", "mp4a": "AAC"}
+                        audio_tag = f"  + {_ac.get(best_audio['codec'], best_audio['codec'].upper())} {best_audio['abr']}kbps"
+                    else:
+                        audio_tag = ""
 
-        elif mode == "2":
-            if not video_fmts:
-                print("  No se encontraron formatos de video.")
-                continue
-            if not check_ffmpeg():
-                print("  ⚠ ffmpeg no encontrado — el video se descargará sin audio separado.")
-                print("    Instalá ffmpeg para obtener video + mejor audio combinados.")
-                print()
+                    def _video_label(v):
+                        res    = f"{v['height']}p" if v['height'] else "?"
+                        fps_s  = f" {v['fps']}fps" if v['fps'] and v['fps'] != 30 else "     "
+                        vbr_s  = f"  {v['vbr']}kbps" if v['vbr'] else ""
+                        size_s = f"  ~{v['filesize']/1024/1024:.0f}MB" if v['filesize'] else ""
+                        return f"{res:<6}{fps_s}  {v['vcodec']:<7}{vbr_s}{size_s}{audio_tag}"
 
-            best_audio = audio_fmts[0] if audio_fmts else None
-            if best_audio:
-                _ac = {"opus": "Opus", "aac": "AAC", "mp4a": "AAC"}
-                audio_tag = f"  + {_ac.get(best_audio['codec'], best_audio['codec'].upper())} {best_audio['abr']}kbps"
-            else:
-                audio_tag = ""
+                    fmt = pick(
+                        video_fmts,
+                        _video_label,
+                        "📹 Calidades de video disponibles:"
+                    )
+                    if not fmt:
+                        continue
 
-            def _video_label(v):
-                res    = f"{v['height']}p" if v['height'] else "?"
-                fps_s  = f" {v['fps']}fps" if v['fps'] and v['fps'] != 30 else "     "
-                vbr_s  = f"  {v['vbr']}kbps" if v['vbr'] else ""
-                size_s = f"  ~{v['filesize']/1024/1024:.0f}MB" if v['filesize'] else ""
-                return f"{res:<6}{fps_s}  {v['vcodec']:<7}{vbr_s}{size_s}{audio_tag}"
-
-            fmt = pick(video_fmts, _video_label, "  Calidades de video disponibles:")
-            if not fmt:
-                continue
-
-            yt_download_video(url, dest, fmt["format_id"],
-                              best_audio["format_id"] if best_audio else None)
+                    yt_download_video(url, dest, fmt["format_id"],
+                                      best_audio["format_id"] if best_audio else None)
+                    print_success_box("Descarga completada", f"Guardado en: {dest}")
             print(f"\n  ✓ Guardado en: {dest}")
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -1075,7 +1196,7 @@ def main():
     tidal_session = None
 
     while True:
-        print(f"\n  [bold deep_sky_blue1]📁 Descargas:[/bold deep_sky_blue1] [gold1]{cfg['download_dir']}[/gold1]\n")
+        console.print(f"\n  [bold deep_sky_blue1]📁 Descargas:[/bold deep_sky_blue1] [gold1]{cfg['download_dir']}[/gold1]\n")
         
         # Menú principal con navegación por flechas
         menu_options = [

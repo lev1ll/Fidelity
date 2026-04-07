@@ -26,8 +26,8 @@ ORANGE = "orange1"
 def print_banner():
     """Banner épico estilo Gemini con ASCII art multicolor y efectos vibrantez."""
     
-    # Crear ASCII art grande con pyfiglet
-    fig = pyfiglet.Figlet(font='slant', width=100)
+    # Crear ASCII art grande con pyfiglet - font 'big' para letras más juntas y legibles
+    fig = pyfiglet.Figlet(font='big', width=100)
     ascii_text = fig.renderText('FIDELITY')
     
     # Colorear cada CARÁCTER del ASCII con colores diferentes para máximo impacto (tipo Gemini)
@@ -56,7 +56,7 @@ def print_banner():
     
     colored_ascii_text = '\n'.join(colored_ascii)
     
-    # Banner con máximo de decoración y colores vibrantes
+    # Banner con máximo de decoración y colores vibrantes (sin la línea de Cyberpunk)
     banner_parts = [
         f"\n[bold deep_sky_blue1]▓▓▓▓▓[/bold deep_sky_blue1] " +
         f"[bold hot_pink]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold hot_pink] " +
@@ -64,13 +64,7 @@ def print_banner():
         
         colored_ascii_text,
         
-        f"\n[bold hot_pink]⚡[/bold hot_pink]  " +
-        f"[bold gold1]🎵[/bold gold1]  " +
-        f"[bold medium_purple]C Y B E R P U N K   M U S I C   D O W N L O A D E R[/bold medium_purple]  " +
-        f"[bold gold1]🎵[/bold gold1]  " +
-        f"[bold hot_pink]⚡[/bold hot_pink]\n",
-        
-        f"[deep_sky_blue1]╔══════════════════════════════════════════════════════╗[/deep_sky_blue1]\n",
+        f"\n[deep_sky_blue1]╔══════════════════════════════════════════════════════╗[/deep_sky_blue1]\n",
         
         f"  [bold green1]█[/bold green1] " +
         f"[bold orange1]Tidal Hi-Res 24-bit[/bold orange1] " +
@@ -281,3 +275,74 @@ def print_info_box(title, message):
         padding=(1, 2)
     )
     console.print(panel)
+
+def print_download_progress(filename, current, total, downloaded_bytes=None, total_bytes=None):
+    """Muestra progreso de descarga con una línea mejorada."""
+    percent = (current / total * 100) if total > 0 else 0
+    bar_length = 25
+    filled = int(bar_length * current / total) if total > 0 else 0
+    bar = "█" * filled + "░" * (bar_length - filled)
+    
+    # Información de tamaño si la tenemos
+    size_info = ""
+    if downloaded_bytes and total_bytes:
+        downloaded_mb = downloaded_bytes / (1024 * 1024)
+        total_mb = total_bytes / (1024 * 1024)
+        size_info = f" {downloaded_mb:.1f}MB / {total_mb:.1f}MB"
+    
+    filename_short = filename[:35] if len(filename) > 35 else filename
+    console.print(f"  [hot_pink]▶[/hot_pink] [{bar}] {percent:5.1f}%  [cyan]{filename_short}{size_info}[/cyan]")
+
+def print_album_progress(album_name, current_track, total_tracks):
+    """Muestra el progreso del álbum actual."""
+    percent = (current_track / total_tracks * 100) if total_tracks > 0 else 0
+    bar_length = 20
+    filled = int(bar_length * current_track / total_tracks) if total_tracks > 0 else 0
+    bar = "▮" * filled + "▯" * (bar_length - filled)
+    
+    console.print(f"\n[bold gold1]💿 {album_name}[/bold gold1]")
+    console.print(f"  [{bar}] {current_track}/{total_tracks} tracks\n")
+
+def print_track_downloading(track_num, total, artist, track_name, duration=""):
+    """Muestra que se está descargando un track."""
+    progress_text = f"  [hot_pink]⟳[/hot_pink] [{track_num}/{total}] [bold cyan]{artist}[/bold cyan] - [magenta]{track_name}[/magenta]"
+    if duration:
+        progress_text += f" [medium_purple]({duration})[/medium_purple]"
+    console.print(progress_text)
+
+def print_batch_progress(completed, total, current_item=""):
+    """Muestra progreso de un lote de descargas."""
+    percent = (completed / total * 100) if total > 0 else 0
+    bar_length = 20
+    filled = int(bar_length * completed / total) if total > 0 else 0
+    bar = "█" * filled + "░" * (bar_length - filled)
+    
+    console.print(f"  [bold deep_sky_blue1]General:[/bold deep_sky_blue1] [{bar}] {percent:5.1f}% ({completed}/{total})")
+    if current_item:
+        console.print(f"  [cyan]→ {current_item}[/cyan]")
+
+def show_download_summary(total_files, total_size_mb, duration_seconds, success_count=None, error_count=0):
+    """Muestra un resumen final de descargas."""
+    import time
+    
+    console.print(f"\n[bold deep_sky_blue1]╔═══════════════════════════════════════╗[/bold deep_sky_blue1]")
+    console.print(f"[bold green1]✓ Descarga completada![/bold green1]")
+    console.print(f"[bold deep_sky_blue1]╠═══════════════════════════════════════╣[/bold deep_sky_blue1]")
+    console.print(f"  [bold cyan]📊 Total:[/bold cyan] {total_files} archivos")
+    console.print(f"  [bold cyan]💾 Tamaño:[/bold cyan] {total_size_mb:.1f} MB")
+    
+    if duration_seconds:
+        minutes = int(duration_seconds // 60)
+        seconds = int(duration_seconds % 60)
+        console.print(f"  [bold cyan]⏱️  Tiempo:[/bold cyan] {minutes:02d}:{seconds:02d}")
+    
+    if success_count is not None and success_count > 0:
+        console.print(f"  [bold green1]✓ Exitosos:[/bold green1] {success_count}")
+    if error_count > 0:
+        console.print(f"  [bold red]✗ Con error:[/bold red] {error_count}")
+    
+    if total_size_mb > 0 and duration_seconds and duration_seconds > 0:
+        speed = total_size_mb / (duration_seconds / 3600)
+        console.print(f"  [bold gold1]⚡ Velocidad:[/bold gold1] {speed:.2f} MB/s")
+    
+    console.print(f"[bold deep_sky_blue1]╚═══════════════════════════════════════╝[/bold deep_sky_blue1]\n")

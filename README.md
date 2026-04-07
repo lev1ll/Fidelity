@@ -64,7 +64,29 @@ Dependencies install automatically on first run.
 
 ## Usage
 
-Search by name or paste a URL. For Tidal, you'll be prompted to log in the first time — just open the link in your browser. The session is saved so you won't need to log in again.
+### Tidal Hi-Res Downloads (FLAC 24-bit)
+
+**Requirements:**
+- Tidal app must be **open and logged in** with a HiFi or HiFi Plus account
+- Fidelity automatically extracts the Hi-Res token from the Tidal desktop app
+- **No browser login needed** — everything is automatic
+
+Simply run:
+```bash
+fidelity
+```
+
+Select "1. Tidal" → Search or paste a URL → Fidelity will automatically find and use your Tidal token for Hi-Res downloads.
+
+### YouTube Downloads
+
+No account needed. Select "2. YouTube" and paste a URL or search for anything.
+
+### Search or Direct Links
+
+- **Tidal:** Artist name, album, track, or paste `https://tidal.com/artist/...`
+- **YouTube:** Song name, artist name, or paste any YouTube link
+- **Multiple selections:** Use commas to download several items at once (e.g., `1,3,5`)
 
 Downloads are organized by platform:
 
@@ -72,7 +94,6 @@ Downloads are organized by platform:
 ~/Downloads/Musica/
   Tidal/
   YouTube/
-  Spotify/
 ```
 
 ---

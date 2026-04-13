@@ -557,12 +557,15 @@ def tidal_download_album(session, album, dest_base):
         ) as progress:
 
             def download_single_track(track_info):
+                from rich.markup import escape as _esc
                 nonlocal total_size_mb, downloaded, errors
                 track, num = track_info
 
                 artist = ", ".join(a.name for a in track.artists) if track.artists else "?"
                 name = track.name
-                label = f"[deep_sky_blue1][{num:>2}/{total_tracks}][/deep_sky_blue1] [gold1]{name[:32]}[/gold1]  [dim]{artist[:20]}[/dim]"
+                n = _esc(name[:32])
+                a = _esc(artist[:20])
+                label = f"[deep_sky_blue1][{num:>2}/{total_tracks}][/deep_sky_blue1] [gold1]{n}[/gold1]  [dim]{a}[/dim]"
 
                 with _lock:
                     tid = progress.add_task(label, total=None)
@@ -584,21 +587,21 @@ def tidal_download_album(session, album, dest_base):
                             detail = f"[bold red]{bd}-bit[/bold red] [dim]/[/dim] [bold cyan]{sr/1000:.1f} kHz[/bold cyan]  [dim]{size_mb:.1f} MB[/dim]"
                         else:
                             detail = f"[dim]{size_mb:.1f} MB[/dim]"
-                        done_label = f"[green1]✓[/green1] [deep_sky_blue1][{num:>2}/{total_tracks}][/deep_sky_blue1] [gold1]{name[:32]}[/gold1]  {detail}"
+                        done_label = f"[green1]✓[/green1] [deep_sky_blue1][{num:>2}/{total_tracks}][/deep_sky_blue1] [gold1]{n}[/gold1]  {detail}"
                         with _lock:
                             progress.update(tid, total=1, completed=1, description=done_label)
                             total_size_mb += size_mb
                             downloaded += 1
                         return (True, size_mb)
                     else:
-                        fail_label = f"[red]✗[/red] [deep_sky_blue1][{num:>2}/{total_tracks}][/deep_sky_blue1] [gold1]{name[:32]}[/gold1]  [red]no descargado[/red]"
+                        fail_label = f"[red]✗[/red] [deep_sky_blue1][{num:>2}/{total_tracks}][/deep_sky_blue1] [gold1]{n}[/gold1]  [red]no descargado[/red]"
                         with _lock:
                             progress.update(tid, total=1, completed=1, description=fail_label)
                             errors += 1
                         return (False, 0)
 
                 except Exception as e:
-                    err_label = f"[red]✗[/red] [deep_sky_blue1][{num:>2}/{total_tracks}][/deep_sky_blue1] [gold1]{name[:32]}[/gold1]  [red]{str(e)[:40]}[/red]"
+                    err_label = f"[red]✗[/red] [deep_sky_blue1][{num:>2}/{total_tracks}][/deep_sky_blue1] [gold1]{n}[/gold1]  [red]{_esc(str(e)[:40])}[/red]"
                     with _lock:
                         progress.update(tid, total=1, completed=1, description=err_label)
                         errors += 1

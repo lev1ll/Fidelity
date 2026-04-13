@@ -379,6 +379,7 @@ def get_tw_session():
 
     ensure_installed(["tidal-wave", "cachecontrol"])
     import time
+    _setup_tw_logging()
     _patch_tidal_wave()
 
     print()
@@ -527,8 +528,6 @@ def tidal_download_album(session, album, dest_base):
     console.print()
 
     tw_session = get_tw_session()
-    _setup_tw_logging()
-
     start_time = time.time()
     downloaded = 0
     errors = 0

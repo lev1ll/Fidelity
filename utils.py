@@ -41,12 +41,20 @@ def check_and_install():
 # ─── Logging / archivos ───────────────────────────────────────────────────────
 
 def _setup_tw_logging():
-    """Silencia los logs internos de tidal-wave."""
+    """Silencia todos los loggers de tidal-wave y sub-módulos."""
     import logging
-    root = logging.getLogger("tidal_wave")
-    root.setLevel(logging.CRITICAL)
-    root.handlers.clear()
-    root.propagate = False
+    # Silenciar el root logger de tidal_wave y todos sus hijos
+    for name, logger in logging.Logger.manager.loggerDict.items():
+        if "tidal" in name.lower():
+            if isinstance(logger, logging.Logger):
+                logger.setLevel(logging.CRITICAL)
+                logger.handlers.clear()
+                logger.propagate = False
+    # Asegurar el logger raíz también
+    tw = logging.getLogger("tidal_wave")
+    tw.setLevel(logging.CRITICAL)
+    tw.handlers.clear()
+    tw.propagate = False
 
 def _copy_file_safe(src_path):
     """Copia un archivo a un directorio temporal para evitar locks de Windows.

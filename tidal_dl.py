@@ -7,9 +7,9 @@ import shutil
 import json
 import re
 import questionary
-from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, print_error_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
+from ui import print_banner, print_section, print_status, print_welcome, menu_interactive, print_menu_table, print_info_box, print_error_box, print_success_box, console, print_download_progress, print_album_progress, print_track_downloading, print_batch_progress, show_download_summary
 
-__version__ = "2.0.8"
+__version__ = "2.0.10"
 GITHUB_REPO  = "lev1ll/Fidelity"
 
 # ─── Auto-install dependencias base ──────────────────────────────────────────
@@ -1218,11 +1218,13 @@ def yt_download(url, dest_dir, format_id=None):
         postprocessors += [
             {"key": "FFmpegExtractAudio", "preferredcodec": "opus"},
             {"key": "FFmpegMetadata"},
+            {"key": "EmbedThumbnail"},
         ]
     opts = {
         "format": fmt,
         "outtmpl": str(dest_dir / "%(title)s.%(ext)s"),
         "postprocessors": postprocessors,
+        "writethumbnail": has_ffmpeg,
         "quiet": False,
         "no_warnings": True,
     }

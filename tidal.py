@@ -675,7 +675,8 @@ def menu_tidal(session, download_dir):
         console.print("\n[bold deep_sky_blue1]── Tidal ──────────────────────────────[/bold deep_sky_blue1]")
         console.print("[gold1]Calidad: FLAC Lossless 16-bit / Hi-Res 24-bit[/gold1]")
         console.print("[cyan1]  • Requiere: Tidal app abierta + HiFi/HiFi Plus[/cyan1]")
-        console.print("[medium_purple]  • Token: se extrae automático (sin navegador)[/medium_purple]\n")
+        console.print("[medium_purple]  • Token: se extrae automático (sin navegador)[/medium_purple]")
+        console.print("[dim]  🟢 16-bit FLAC  🔴 24-bit Hi-Res  [bold red](explicit)[/bold red] letra sin censura  [bold cyan](clean)[/bold cyan] censurada  [dim](+N) versiones duplicadas ocultas[/dim][/dim]\n")
 
         menu_options = [
             "🔍 Buscar artista",
@@ -726,7 +727,7 @@ def menu_tidal(session, download_dir):
                         q = getattr(a, "audio_quality", None) or ""
                         q_tag = " 🔴 [24-bit Hi-Res]" if "HI_RES" in q.upper() else (" 🟢 [16-bit FLAC]" if "LOSSLESS" in q.upper() else "")
                         explicit = getattr(a, "explicit", None)
-                        ex_tag = " 🅴" if explicit else (" 🅲" if explicit is False else "")
+                        ex_tag = " (explicit)" if explicit else (" (clean)" if explicit is False else "")
                         return f"{a.name} — {a.artist.name} ({a.release_date.year if a.release_date else '?'}){q_tag}{ex_tag}"
                     fb_selected = pick_multi(fb_albums, _fb_album_label, "💿 Álbumes encontrados:")
                     if fb_selected:
@@ -737,7 +738,7 @@ def menu_tidal(session, download_dir):
                     console.print(f"\n  [bold]Tracks encontrados ({len(fb_tracks)}):[/bold]")
                     def _fb_track_label(t):
                         explicit = getattr(t, "explicit", None)
-                        ex_tag = " 🅴" if explicit else (" 🅲" if explicit is False else "")
+                        ex_tag = " (explicit)" if explicit else (" (clean)" if explicit is False else "")
                         return f"{t.name}{ex_tag} — {', '.join(a.name for a in t.artists)} ({t.album.name if t.album else ''})"
                     fb_t_selected = pick_multi(
                         fb_tracks,
@@ -827,7 +828,7 @@ def menu_tidal(session, download_dir):
                 dup = getattr(a, "_dup_count", 0)
                 dup_tag = f" (+{dup} versión/es)" if dup > 0 else ""
                 explicit = getattr(a, "explicit", None)
-                ex_tag = " 🅴" if explicit else (" 🅲" if explicit is False else "")
+                ex_tag = " (explicit)" if explicit else (" (clean)" if explicit is False else "")
                 return f"{a.name} ({a.release_date.year if a.release_date else '?'}) — {a.num_tracks} tracks{q_tag}{ex_tag}{dup_tag}"
 
             selected = pick_multi(
@@ -873,7 +874,7 @@ def menu_tidal(session, download_dir):
                     else:
                         q_tag = ""
                 explicit = getattr(a, "explicit", None)
-                ex_tag = " 🅴" if explicit else (" 🅲" if explicit is False else "")
+                ex_tag = " (explicit)" if explicit else (" (clean)" if explicit is False else "")
                 return f"{a.name} — {a.artist.name} ({a.release_date.year if a.release_date else '?'}){q_tag}{ex_tag}"
 
             selected = pick_multi(
@@ -896,7 +897,7 @@ def menu_tidal(session, download_dir):
                 continue
             def _track_label(t):
                 explicit = getattr(t, "explicit", None)
-                ex_tag = " 🅴" if explicit else (" 🅲" if explicit is False else "")
+                ex_tag = " (explicit)" if explicit else (" (clean)" if explicit is False else "")
                 return f"{t.name}{ex_tag} — {', '.join(a.name for a in t.artists)} ({t.album.name if t.album else ''})"
             selected = pick_multi(
                 tracks,

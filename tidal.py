@@ -789,7 +789,7 @@ def menu_tidal(session, download_dir):
             from collections import defaultdict as _dd
             _name_groups = _dd(list)
             for _item in all_items:
-                _name_groups[_item.name.lower().strip()].append(_item)
+                _name_groups[(_item.name.lower().strip(), getattr(_item, "explicit", None))].append(_item)
 
             deduped = []
             for _group in _name_groups.values():

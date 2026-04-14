@@ -43,14 +43,10 @@ def check_and_install():
 def _setup_tw_logging():
     """Silencia todos los loggers de tidal-wave y sub-módulos."""
     import logging
-    # Silenciar el root logger de tidal_wave y todos sus hijos
-    for name, logger in logging.Logger.manager.loggerDict.items():
-        if "tidal" in name.lower():
-            if isinstance(logger, logging.Logger):
-                logger.setLevel(logging.CRITICAL)
-                logger.handlers.clear()
-                logger.propagate = False
-    # Asegurar el logger raíz también
+    # Bloqueo global: cualquier logger (incluso los creados después de esta llamada)
+    # que emita WARNING o inferior quedará silenciado
+    logging.disable(logging.WARNING)
+    # Silenciar explícitamente el árbol de tidal_wave por si acaso
     tw = logging.getLogger("tidal_wave")
     tw.setLevel(logging.CRITICAL)
     tw.handlers.clear()

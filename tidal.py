@@ -489,6 +489,7 @@ def tidal_download_track(session, track, dest_dir, album=None, num=None, total=N
             no_extra_files=True,
         )
         if result:
+            result = Path(result)
             size = result.stat().st_size / 1024 / 1024
             print(f"  ✓ {size:.1f} MB — {result.suffix.lstrip('.').upper()}")
             print(f"  → {result}")
@@ -581,6 +582,7 @@ def tidal_download_album(session, album, dest_base):
                     )
 
                     if result:
+                        result = Path(result)
                         size_mb = result.stat().st_size / 1024 / 1024
                         bd, sr = _read_file_quality(result)
                         if bd and sr:

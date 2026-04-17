@@ -6,7 +6,7 @@ import questionary
 from pathlib import Path
 from ui import console, menu_interactive
 
-__version__ = "2.0.11"
+__version__ = "2.0.18"
 GITHUB_REPO  = "lev1ll/Fidelity"
 REQUIRED_BASE = ["tidalapi", "requests", "mutagen"]
 

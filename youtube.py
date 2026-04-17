@@ -73,7 +73,16 @@ def yt_get_all_formats(url):
 
     return info, audio_fmts[:8], video_fmts[:8]
 
-def yt_download(url, dest_dir, format_id=None):
+def _ask_audio_codec():
+    """Pregunta al usuario Opus o MP3. Retorna 'opus' o 'mp3'."""
+    choice = menu_interactive(
+        "Formato de audio",
+        ["🎵 Opus (mejor calidad, menor tamaño)", "🎼 MP3 320kbps (compatible con todo)"],
+        "¿En qué formato guardamos?"
+    )
+    return "mp3" if choice == 1 else "opus"
+
+def yt_download(url, dest_dir, format_id=None, codec="opus"):
     import yt_dlp
     has_ffmpeg = check_ffmpeg()
     if format_id:
@@ -84,11 +93,10 @@ def yt_download(url, dest_dir, format_id=None):
         fmt = "bestaudio/best"
     postprocessors = []
     if has_ffmpeg:
-        postprocessors += [
-            {"key": "FFmpegExtractAudio", "preferredcodec": "opus"},
-            {"key": "FFmpegMetadata"},
-            {"key": "EmbedThumbnail"},
-        ]
+        pp = {"key": "FFmpegExtractAudio", "preferredcodec": codec}
+        if codec == "mp3":
+            pp["preferredquality"] = "320"
+        postprocessors += [pp, {"key": "FFmpegMetadata"}, {"key": "EmbedThumbnail"}]
     opts = {
         "format": fmt,
         "outtmpl": str(dest_dir / "%(title)s.%(ext)s"),
@@ -163,10 +171,11 @@ def menu_youtube(download_dir):
             )
             if not selected:
                 continue
+            codec = _ask_audio_codec()
             dest.mkdir(parents=True, exist_ok=True)
             for entry in selected:
                 url = f"https://www.youtube.com/watch?v={entry['id']}"
-                yt_download(url, dest)
+                yt_download(url, dest, codec=codec)
             print_success_box("Descarga completada", f"Guardado en: {dest}")
 
         elif choice == 1:  # Pegar URL
@@ -202,11 +211,12 @@ def menu_youtube(download_dir):
             dest.mkdir(parents=True, exist_ok=True)
 
             if mode == 0:  # Audio
+                codec = _ask_audio_codec()
                 best = audio_fmts[0] if audio_fmts else None
                 if best:
                     size = f" (~{best['filesize']/1024/1024:.0f} MB)" if best['filesize'] else ""
                     console.print(f"  [green1]🔊 Audio: {best['codec'].upper()}  {best['abr']}kbps  .{best['ext']}{size}  ★ mejor disponible[/green1]\n")
-                yt_download(url, dest, best["format_id"] if best else None)
+                yt_download(url, dest, best["format_id"] if best else None, codec=codec)
                 print_success_box("Descarga completada", f"Guardado en: {dest}")
 
             elif mode == 1:  # Video

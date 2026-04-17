@@ -145,6 +145,38 @@ def _auto_extract_tidal_token():
     token_file.write_bytes(_b64.b64encode(token_data.encode("utf-8")))
     return True
 
+# ─── Launch Tidal app ────────────────────────────────────────────────────────
+
+def _launch_tidal():
+    """Intenta abrir la app de Tidal. Retorna True si se lanzó."""
+    import subprocess
+
+    possible_exes = [
+        Path.home() / "AppData" / "Local" / "TIDAL" / "TIDAL.exe",
+        Path.home() / "AppData" / "Roaming" / "TIDAL" / "TIDAL.exe",
+    ]
+    packages_dir = Path.home() / "AppData" / "Local" / "Packages"
+    if packages_dir.exists():
+        for pkg in packages_dir.glob("*TIDAL*"):
+            for exe in pkg.glob("**/TIDAL.exe"):
+                possible_exes.append(exe)
+
+    for exe in possible_exes:
+        if exe.exists():
+            try:
+                subprocess.Popen([str(exe)])
+                return True
+            except Exception:
+                pass
+
+    try:
+        subprocess.Popen(["cmd", "/c", "start", "", "tidal:"])
+        return True
+    except Exception:
+        pass
+
+    return False
+
 # ─── tidal-wave patches ───────────────────────────────────────────────────────
 
 def _patch_tidal_wave():
@@ -385,18 +417,25 @@ def get_tw_session():
     print()
     print("  Buscando token Hi-Res del Tidal desktop...", end="", flush=True)
 
-    found = False
-    for attempt in range(3):
-        if _auto_extract_tidal_token():
-            print(" ✓ encontrado!")
-            found = True
-            break
-        if attempt < 2:
-            print(".", end="", flush=True)
-            time.sleep(1)
+    found = _auto_extract_tidal_token()
+    if found:
+        print(" ✓ encontrado!")
+    else:
+        print(" no encontrado.")
+        print("  ⟳ Abriendo Tidal automáticamente...", end="", flush=True)
+        launched = _launch_tidal()
+        if launched:
+            for _ in range(6):
+                time.sleep(3)
+                print(".", end="", flush=True)
+                if _auto_extract_tidal_token():
+                    found = True
+                    print(" ✓ encontrado!")
+                    break
+        else:
+            print(" (no se pudo abrir)")
 
     if not found:
-        print(" no encontrado.")
         print()
         print("  ✗ No se pudo extraer token Hi-Res del Tidal desktop.")
         print("  Asegúrate de:")
@@ -511,6 +550,20 @@ def tidal_download_album(session, album, dest_base):
     folder = dest_base / "Tidal"
     folder.mkdir(parents=True, exist_ok=True)
 
+    # ── Selección de calidad ──────────────────────────────────────────────────
+    _quality_opts = [
+        ("🔴 Hi-Res 24-bit FLAC  (máxima)", TWAudioFormat.hi_res),
+        ("🟢 FLAC 16-bit  (calidad CD)", TWAudioFormat.lossless),
+        ("🔵 AAC High ~320kbps", TWAudioFormat.high),
+        ("⚪ AAC Low ~96kbps", TWAudioFormat.low),
+    ]
+    q_choice = menu_interactive(
+        "Calidad de audio",
+        [label for label, _ in _quality_opts],
+        f"💿 {album.name} — ¿qué calidad querés descargar?"
+    )
+    audio_format = _quality_opts[q_choice][1]
+
     # ── Header del álbum ──────────────────────────────────────────────────────
     q = (getattr(album, "audio_quality", "") or "").upper()
     if "HI_RES" in q:
@@ -576,7 +629,7 @@ def tidal_download_album(session, album, dest_base):
                     tw_track = TWTrack(track_id=track.id)
                     result = tw_track.get(
                         session=tw_session,
-                        audio_format=TWAudioFormat.hi_res,
+                        audio_format=audio_format,
                         out_dir=folder,
                         no_extra_files=True,
                     )
